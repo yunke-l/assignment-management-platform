@@ -1,0 +1,60 @@
+{
+  "verifiedAt": "2026-09-24T23:29:53.615Z",
+  "node": "v24.5.0",
+  "pglite": "0.5.8",
+  "method": "Offline directory copy after clean shutdown; restore to a separate, previously absent directory with the same PGlite version.",
+  "scope": "Synthetic local PGlite fixture only. Does not establish PostgreSQL pg_dump recovery, cross-version compatibility or production disaster recovery.",
+  "fixtureDirectory": ".local/recovery-drill-KeAxVH",
+  "backupMs": 543,
+  "restoreAndVerifyMs": 1459,
+  "tables": {
+    "schema_migrations": {
+      "count": 3,
+      "sha256": "95038126fdd46b66fe8bddd5fe4935d98bd031e483382687d55aceb59247a272"
+    },
+    "users": {
+      "count": 4,
+      "sha256": "318e06511f7f6cc10d5cda2d1a6ae5dbe0d8f47e3edb6a881d658f150c38008b"
+    },
+    "classrooms": {
+      "count": 2,
+      "sha256": "01d22fd0ab9d0220756ece171b2475cc390db4adf17f631c754195a090f4311f"
+    },
+    "class_memberships": {
+      "count": 2,
+      "sha256": "d183d4ca48a2a4c44b00fdfd313628b5114277fcad2b14a705ce4fcc38f807eb"
+    },
+    "assignments": {
+      "count": 1,
+      "sha256": "25aa3b10813f36b7082e70cb15404e5087d1515e85d55c1baddb7bc9176e7ec5"
+    },
+    "questions": {
+      "count": 1,
+      "sha256": "c5d82990408cfda76e569653aa7b10bb78695ab59d1d3b4ee01eeaf77c88fe1e"
+    },
+    "assignment_recipients": {
+      "count": 1,
+      "sha256": "8a465e1ab5e0e1073ddbdd75d5c127d85083b4713e652835be2b457f61259406"
+    },
+    "submissions": {
+      "count": 1,
+      "sha256": "031a6449486bc3addab672bed61706d9a72bce561b70e955559335f10be1d1f6"
+    },
+    "invitations": {
+      "count": 1,
+      "sha256": "5065efd08dd4c818295cb9dd89f63c41e16320c6f2661b0143faebc71362a480"
+    },
+    "sessions": {
+      "count": 2,
+      "sha256": "b1785904ceaf07eb3b9e7701e507153343146d58433577107904a77e750f24d8"
+    }
+  },
+  "assertions": [
+    "All ten table counts and SHA-256 logical data digests match",
+    "Applied migrations remain valid",
+    "Restored sessions and invitations revoked",
+    "Teacher and student can sign in again",
+    "Student result and teacher report preserve submission ID and score",
+    "Student answer keys remain hidden"
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "name": "assignment-management-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "npm run build -w @amp/contracts && concurrently -k -n api,web \"npm run dev -w @amp/api\" \"npm run dev -w @amp/web\"",
+    "dev:demo": "node scripts/demo.mjs",
+    "db:migrate": "npm run build -w @amp/contracts && npm run db:migrate -w @amp/api",
+    "db:seed": "npm run build -w @amp/contracts && npm run db:seed -w @amp/api",
+    "build": "npm run build -w @amp/contracts && npm run build -w @amp/api && npm run build -w @amp/web",
+    "typecheck": "npm run build -w @amp/contracts && npm run typecheck -w @amp/api && npm run typecheck -w @amp/web && tsc -p tsconfig.tools.json",
+    "test": "npm run build -w @amp/contracts && npm run test -w @amp/api",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:built",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "accounts": "npm run build -w @amp/contracts && npm run accounts -w @amp/api --",
+    "dev:e2e": "concurrently -k -n api,web \"tsx --tsconfig apps/api/tsconfig.json scripts/e2e-server.ts\" \"npm run dev -w @amp/web -- --port 5175\"",
+    "test:e2e": "npm run build -w @amp/contracts && playwright test",
+    "benchmark": "npm run build -w @amp/contracts && tsx --tsconfig apps/api/tsconfig.json scripts/benchmark.ts",
+    "test:built": "node scripts/smoke-built.mjs",
+    "test:recovery": "npm run build && node scripts/recovery-drill.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "concurrently": "^9.2.0",
+    "prettier": "^3.9.9",
+    "typescript": "~5.9.3"
+  }
+}
