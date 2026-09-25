@@ -66,3 +66,11 @@ All evidence uses synthetic data. These are automated workflow recordings, not e
 - Vite builds report two non-failing third-party Zod PURE-comment warnings; the compiler strips those comments and the generated application passes the built-entry smoke test.
 
 Do not describe synthetic data sizes, this single local latency sample, or generated implementation as production users, uptime guarantees, measured commercial impact or independently demonstrated interview proficiency.
+
+## Demo startup correction (2026-09-25)
+
+The previously retained demo process still held ports 3100 and 5173. Starting a second web server reproduced `Port 5173 is already in use`; the outer demo script reduced that failure to an unhandled `npm run dev exited with 1` stack trace.
+
+The launcher now checks both ports before migrations or seeding, prints actionable errors, and terminates the process group it starts when interrupted. The prior instance was stopped gracefully, and the existing demo directory was backed up before verification. The revised launcher completed migrations and seeding, served the page and proxied database health endpoint with HTTP 200, and released both ports after Ctrl+C. It was left stopped so the project owner can start it from VS Code.
+
+Five new `npm run test:dev` regressions passed on macOS: an occupied port leaves its listener untouched; probe sockets are released; child failures report their exit code; interrupted startup does not launch another command; stopping a parent releases ports held by its descendants. They are included in `npm run check`; the process-group regression covers macOS/Linux and is explicitly skipped on Windows. The README now documents the port-conflict recovery procedure.
