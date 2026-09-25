@@ -17,11 +17,11 @@
 | 本地持久化与恢复                 | 演示库升级前已备份；独立 PGlite 合成库完成离线复制恢复、10 张表完整性比对、凭据撤销和历史结果核对；[恢复证据](evidence/recovery.json) |
 | 构建及部署准备                   | 类型检查、生产构建、编译入口冒烟检查通过；提供 Docker、Compose、Caddy、CI、迁移、回滚和恢复操作文档                                   |
 
-详细检查数量和运行环境以 [验证记录](VERIFICATION.md) 为准。源码、配置和合成演示证据保存在本地 Git；依赖、数据库、环境变量及运行产物排除在版本控制外。
+详细检查数量和运行环境以 [验证记录](VERIFICATION.md) 为准。源码、配置和合成演示证据保存在 Git，后续按用户要求建立了 [GitHub 私有仓库](https://github.com/yunke-l/assignment-management-platform)；依赖、数据库、环境变量及运行产物排除在版本控制外。应用继续在本地运行，托管 CI 结果可在 [Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml) 查看。
 
 ## 本次范围之外
 
-- 远端仓库、托管 CI、域名、HTTPS 和公开部署：等待选定平台后进行。
+- 域名、HTTPS 和公开应用部署：等待选定平台后进行。私有 GitHub 代码托管已按后续要求补充。
 - Docker 构建/容器运行、生产 PostgreSQL 备份恢复：配置及步骤已备齐，须在目标环境实际验收。
 - 真机 Safari、完整辅助技术审计、长期负载与生产容量：不以本地 Chromium 或单轮合成测试替代。
 - 示例性能目标：最新本地列表 P95 高于 300 ms，已如实记录；未将其计为通过，后续目标环境需进一步定位 HTTP 长尾。

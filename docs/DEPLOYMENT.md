@@ -1,6 +1,6 @@
 # Deployment and recovery
 
-The current delivery is local functionality plus deployment preparation, as requested. No remote repository, hosted CI, DNS, TLS certificate or public environment has been provisioned. Docker is not installed on the verification host, so the container build and Compose stack must pass on a Docker host before deployment is considered verified.
+The current delivery is local functionality plus deployment preparation, as requested. The user subsequently requested [private GitHub source hosting](https://github.com/yunke-l/assignment-management-platform); [Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml) records the hosted checks for each commit. No DNS, TLS certificate or public application environment has been provisioned. Docker is not installed on the local verification host, so the application container build and Compose stack must pass on a Docker host before deployment is considered verified.
 
 ## Production shape
 

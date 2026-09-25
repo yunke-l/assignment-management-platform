@@ -1,6 +1,6 @@
 # Verification record
 
-Date: 2026-09-24. Delivery scope confirmed by the user: local application plus deployment preparation; no public deployment in this task.
+Date: 2026-09-24. Delivery scope confirmed by the user: local application plus deployment preparation; no public application deployment in this task. The user subsequently requested private GitHub source hosting.
 
 ## Completed checks
 
@@ -60,7 +60,7 @@ All evidence uses synthetic data. These are automated workflow recordings, not e
 ## Remaining external verification
 
 - Docker is not installed on this host. Dockerfile, Compose and Caddy configuration are supplied, but their container/TLS deployment must be tested on a Docker host.
-- No remote Git repository was configured or pushed, and hosted GitHub Actions has not run.
+- Source hosting is configured at [the private GitHub repository](https://github.com/yunke-l/assignment-management-platform). Hosted CI results and artifacts are available per commit in [GitHub Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml); local results above do not by themselves prove a hosted run succeeded.
 - No public domain/HTTPS deployment, production backup restore, failover or long-running load test has been completed. See [deployment and recovery](DEPLOYMENT.md) for the commands and acceptance steps.
 - Mobile coverage uses Chromium viewport/touch emulation, not physical iOS/Safari hardware. This is not a comprehensive assistive-technology audit.
 - Vite builds report two non-failing third-party Zod PURE-comment warnings; the compiler strips those comments and the generated application passes the built-entry smoke test.

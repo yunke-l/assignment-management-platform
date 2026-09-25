@@ -4,6 +4,8 @@
 
 本次交付范围：**完整本地版本与部署准备**。线上发布按用户要求留待提供平台后进行。范围核对见 [交付验收](docs/ACCEPTANCE.md)，检查结果见 [验证记录](docs/VERIFICATION.md)，原始范围及阶段见 [开发计划](docs/DEVELOPMENT_PLAN.md)，简历表述和面试演示见 [作品说明](docs/PORTFOLIO.md)。
 
+代码托管：[GitHub 私有仓库](https://github.com/yunke-l/assignment-management-platform) · [GitHub Actions 检查记录](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml)。查看仓库需要获授权的 GitHub 账号；应用仍在本地运行。
+
 ## 已实现
 
 - 教师／学生登录、邀请注册、刷新后保持登录、退出撤销会话、修改密码后撤销所有会话。
@@ -130,7 +132,7 @@ deploy/                   HTTPS 代理及环境变量示例
 
 ## 部署与边界
 
-[部署、迁移、回滚和恢复说明](docs/DEPLOYMENT.md) 包含 Docker/Caddy/PostgreSQL 命令。本地 PGlite 离线恢复已通过；当前没有托管部署、远端 Git 仓库或已运行的托管 CI。本机没有 Docker，容器栈及生产 PostgreSQL 备份恢复尚需在目标环境验证。
+[部署、迁移、回滚和恢复说明](docs/DEPLOYMENT.md) 包含 Docker/Caddy/PostgreSQL 命令。本地 PGlite 离线恢复已通过；代码已接入私有 GitHub 仓库，CI 的各次结果以 Actions 检查记录为准。当前没有应用托管部署；本机没有 Docker，容器栈及生产 PostgreSQL 备份恢复尚需在目标环境验证。
 
 当前版本不含手工批改、附件、多次作答、AI 批改、邮件自动发送、忘记密码自助恢复和分布式限流。会话固定七天后过期。筛选使用大小写不敏感的标题子串匹配；分页在每次请求内使用一致快照，跨页面浏览期间若数据发生增删，需刷新列表。
 
