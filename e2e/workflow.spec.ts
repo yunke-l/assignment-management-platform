@@ -102,13 +102,19 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
       .filter({ has: page.getByRole('heading', { name: `${title} revised`, exact: true }) })
       .click();
     await expect(page.getByRole('cell', { name: '10 / 10', exact: true })).toBeVisible();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await student.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({
       path: `test-results/${info.project.name}-teacher-results.png`,
       fullPage: true,
+      scale: 'css',
+      animations: 'disabled',
     });
     await student.screenshot({
       path: `test-results/${info.project.name}-student-result.png`,
       fullPage: true,
+      scale: 'css',
+      animations: 'disabled',
     });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),

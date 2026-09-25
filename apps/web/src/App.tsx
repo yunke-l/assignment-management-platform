@@ -13,6 +13,7 @@ import { AssignmentForm } from './AssignmentForm';
 
 import { Login, AccountPanel, type Session } from './Auth';
 import { ClassManager } from './ClassManager';
+import { Brand, Owl, WorkspaceIcon } from './Owl';
 const dateLabel = (value: string) =>
   new Date(value).toLocaleString(undefined, {
     month: 'short',
@@ -53,7 +54,8 @@ export function App() {
   }, []);
   if (loading)
     return (
-      <main className="empty" role="status">
+      <main className="empty connection-state" role="status">
+        <Owl className="empty-owl" />
         Opening your workspace…
       </main>
     );
@@ -103,6 +105,14 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
   const [searchInput, setSearchInput] = useState('');
   const [logoutError, setLogoutError] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
+  const [detailRequest, setDetailRequest] = useState(0);
+  const listPanel = useRef<HTMLElement>(null);
+  const detailPanel = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if ((selected || composing) && window.matchMedia('(max-width: 1080px)').matches) {
+      detailPanel.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [selected, composing, detailRequest]);
   const params = new URLSearchParams({ page: String(page), pageSize: '8' });
   if (classFilter) params.set('classId', classFilter);
   if (statusFilter) params.set('status', statusFilter);
@@ -139,9 +149,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <div className="brand">
-          c<span>Classwork</span>
-        </div>
+        <Brand />
         <span className="eyebrow">WORKSPACE</span>
         <nav aria-label="Workspace navigation">
           {(['assignments', 'classes', 'account'] as const).map((item) => (
@@ -151,12 +159,16 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
               aria-current={section === item ? 'page' : undefined}
               onClick={() => setSection(item)}
             >
+              <WorkspaceIcon name={item} />
               {item === 'assignments' ? 'Assignments' : item === 'classes' ? 'Classes' : 'Account'}
             </button>
           ))}
         </nav>
         <div className="sidebar-note">
-          <span className="small-dot" />
+          <span className="sidebar-note-star" aria-hidden="true">
+            ✦
+          </span>
+          <b>A little wiser, every day.</b>
           <p>
             {teacher ? 'A clear next step for every learner.' : 'Small steps. Lasting progress.'}
           </p>
@@ -204,10 +216,10 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           <AccountPanel onChanged={onLogout} />
         ) : (
           <>
-            <section className="page-heading">
-              <div>
+            <section className="page-heading assignment-heading">
+              <div className="heading-copy">
                 <span className="eyebrow">
-                  {teacher ? 'PLAN. SHARE. FOLLOW THROUGH.' : 'YOUR NEXT STEP STARTS HERE.'}
+                  {teacher ? 'A LITTLE STRUCTURE. ROOM TO GROW.' : 'STAY CURIOUS. KEEP GROWING.'}
                 </span>
                 <h1>{teacher ? 'Make learning happen.' : 'Your learning, in motion.'}</h1>
                 <p className="muted">
@@ -215,22 +227,29 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                     ? 'Create assignments and see how your class is doing.'
                     : 'Find your assignments, share your answers, and see your results.'}
                 </p>
+                {teacher && (
+                  <button
+                    className="primary"
+                    onClick={() => {
+                      setEditing(undefined);
+                      setComposing(true);
+                      setSelected(null);
+                      setDetailRequest((value) => value + 1);
+                    }}
+                  >
+                    + New assignment
+                  </button>
+                )}
               </div>
-              {teacher && (
-                <button
-                  className="primary"
-                  onClick={() => {
-                    setEditing(undefined);
-                    setComposing(true);
-                    setSelected(null);
-                  }}
-                >
-                  + New assignment
-                </button>
-              )}
+              <div className="heading-friend">
+                <span className="friend-note">
+                  {teacher ? 'Big ideas start here.' : 'One step at a time.'}
+                </span>
+                <Owl pose={teacher ? 'reading' : 'wave'} />
+              </div>
             </section>
             <div className="workspace-grid">
-              <section className="panel list-panel">
+              <section className="panel list-panel" ref={listPanel}>
                 <div className="panel-title">
                   <h2>Assignments</h2>
                   <span className="count">{list.data?.total ?? '—'}</span>
@@ -303,7 +322,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                 )}
                 {list.data?.items.length === 0 && (
                   <div className="empty">
-                    <div className="empty-icon">▤</div>
+                    <Owl className="empty-owl" pose={teacher ? 'wave' : 'celebrate'} />
                     <h3>
                       {search || classFilter || statusFilter
                         ? 'No matching assignments.'
@@ -312,9 +331,11 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                           : 'You’re all caught up.'}
                     </h3>
                     <p>
-                      {teacher
-                        ? 'Your first assignment will appear here.'
-                        : 'Published assignments from your classes will appear here.'}
+                      {search || classFilter || statusFilter
+                        ? 'Try another title, class or status.'
+                        : teacher
+                          ? 'Your first assignment will appear here.'
+                          : 'Published assignments from your classes will appear here.'}
                     </p>
                   </div>
                 )}
@@ -325,11 +346,14 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                     onClick={() => {
                       setSelected(item.id);
                       setComposing(false);
+                      setDetailRequest((value) => value + 1);
                     }}
                   >
                     <div className="row-meta">
                       <span>{item.className}</span>
-                      <span className={`status ${item.status === 'DRAFT' ? 'draft' : ''}`}>
+                      <span
+                        className={`status ${item.status === 'DRAFT' ? 'draft' : new Date(item.dueAt) < new Date() ? 'closed' : 'published'}`}
+                      >
                         {item.status === 'DRAFT'
                           ? 'Draft'
                           : new Date(item.dueAt) < new Date()
@@ -358,7 +382,19 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                   </button>
                 </div>
               </section>
-              <section className="panel detail-panel">
+              <section
+                className="panel detail-panel"
+                ref={detailPanel}
+                aria-label="Assignment details"
+              >
+                {(selected || composing) && (
+                  <button
+                    className="text-button detail-back"
+                    onClick={() => listPanel.current?.scrollIntoView({ block: 'start' })}
+                  >
+                    ↑ Back to assignments
+                  </button>
+                )}
                 {composing ? (
                   classes.data ? (
                     <AssignmentForm
@@ -398,6 +434,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                   />
                 ) : (
                   <div className="empty detail-empty">
+                    <Owl className="detail-owl" />
                     <span className="eyebrow">ONE PLACE TO KEEP TRACK</span>
                     <h2>{detail.loading ? 'Opening assignment…' : 'The details are here.'}</h2>
                     <p role={detail.error ? 'alert' : undefined}>
@@ -415,7 +452,10 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           </>
         )}
         <footer className="page-footer">
-          Classwork <span>Thoughtful teaching. Visible progress.</span>
+          <span className="footer-brand">
+            Classwork <span aria-hidden="true">✦</span>
+          </span>
+          <span>A little curiosity goes a long way.</span>
         </footer>
       </main>
     </div>
@@ -517,11 +557,14 @@ function AssignmentView({
         </p>
       )}
       {assignment.submission && (
-        <div className="result" role="status">
-          <b>
-            Submitted · {assignment.submission.score} / {assignment.submission.maxScore} points
-          </b>
-          <span>{dateLabel(assignment.submission.submittedAt)}</span>
+        <div className="result submission-result" role="status">
+          <Owl pose="celebrate" className="result-owl" />
+          <div>
+            <b>
+              Submitted · {assignment.submission.score} / {assignment.submission.maxScore} points
+            </b>
+            <span>{dateLabel(assignment.submission.submittedAt)}</span>
+          </div>
         </div>
       )}
       {assignment.questions.map((q, index) => (

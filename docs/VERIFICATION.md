@@ -11,7 +11,7 @@ Date: 2026-09-24. Delivery scope confirmed by the user: local application plus d
 | Same suite on isolated in-memory PGlite                       | **34 passed**, 0 failed, 5 PostgreSQL-only cases intentionally skipped   |
 | Contracts, NestJS and Vite production build                   | Passed                                                                   |
 | Built Node entry serving compiled web assets and API          | Passed: HTML, JS asset, migration, login, class read and DB health       |
-| Playwright desktop and mobile viewport workflows              | **6 passed**, 0 failed; Chromium 153                                     |
+| Playwright desktop and mobile viewport workflows              | **8 passed**, 0 failed; Chromium 153                                     |
 | Existing local demo database upgrade and `npm run dev:demo`   | Passed; HTML and proxied `/api/health` both returned 200                 |
 | Synthetic PostgreSQL HTTP/query measurement                   | Completed; [method, results and limits](PERFORMANCE.md)                  |
 | Local PGlite backup and restore into a fresh directory        | Passed; all 10 tables match, credentials revoked, saved results readable |
@@ -74,3 +74,9 @@ The previously retained demo process still held ports 3100 and 5173. Starting a 
 The launcher now checks both ports before migrations or seeding, prints actionable errors, and terminates the process group it starts when interrupted. The prior instance was stopped gracefully, and the existing demo directory was backed up before verification. The revised launcher completed migrations and seeding, served the page and proxied database health endpoint with HTTP 200, and released both ports after Ctrl+C. It was left stopped so the project owner can start it from VS Code.
 
 Five new `npm run test:dev` regressions passed on macOS: an occupied port leaves its listener untouched; probe sockets are released; child failures report their exit code; interrupted startup does not launch another command; stopping a parent releases ports held by its descendants. They are included in `npm run check`; the process-group regression covers macOS/Linux and is explicitly skipped on Windows. The README now documents the port-conflict recovery procedure.
+
+## Owl interface update (2026-09-25)
+
+The login, assignment workspace, editor, class management, account and submission result screens now share an original SVG owl mascot, warm neutral surfaces and forest-green controls. The desktop list/detail layout remains; smaller screens navigate to the detail panel when opening or creating an assignment and provide a return-to-list button. Application permissions, grading and database rules are unchanged.
+
+TypeScript checks, the Vite production build, built-entry smoke test and all **8 Playwright tests** passed after the update. The two new appearance tests cover the main screens, 320px and 768px layouts, horizontal overflow, unhandled JavaScript errors and mobile detail navigation. Screenshots were visually reviewed; updated evidence uses synthetic test data. See [design notes and previews](DESIGN.md).

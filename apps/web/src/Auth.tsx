@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { Actor } from '@amp/contracts';
 import { request } from './api';
+import { Brand, Owl } from './Owl';
 export type Session = { token: string; user: Actor };
 export function Login({
   onLogin,
@@ -44,40 +45,52 @@ export function Login({
   return (
     <main className="login-layout">
       <section className="intro">
-        <div className="brand">
-          c<span>Classwork</span>
-        </div>
-        <span className="eyebrow">A LITTLE STRUCTURE. MORE LEARNING.</span>
+        <Brand />
+        <span className="eyebrow">SMALL STEPS. BRIGHT IDEAS.</span>
         <h1>
-          From assigned
+          A little curiosity.
           <br />
-          to understood.
+          <span>A world of possibility.</span>
         </h1>
         <p>
-          A shared space for teachers to set the next challenge and students to show what they know.
+          A calmer place to teach. A brighter place to learn. Bring your classroom together, one
+          good question at a time.
         </p>
+        <div className="owl-scene">
+          <div className="scene-halo" />
+          <span className="scene-spark spark-one" aria-hidden="true">
+            ✦
+          </span>
+          <span className="scene-spark spark-two" aria-hidden="true">
+            ✧
+          </span>
+          <span className="scene-leaf leaf-one" aria-hidden="true" />
+          <span className="scene-leaf leaf-two" aria-hidden="true" />
+          <Owl label="Ollie the owl reading a book" />
+          <span className="owl-caption">Meet Ollie. Big on little discoveries.</span>
+        </div>
         <div className="intro-path">
           <span>
-            01
-            <br />
+            <span className="path-number">01</span>
             <b>Create</b>
           </span>
           <i>→</i>
           <span>
-            02
-            <br />
+            <span className="path-number">02</span>
             <b>Submit</b>
           </span>
           <i>→</i>
           <span>
-            03
-            <br />
+            <span className="path-number">03</span>
             <b>Review</b>
           </span>
         </div>
       </section>
       <section className="login-panel">
         <div className="login-card">
+          <span className="login-greeting">
+            A good day to learn <span aria-hidden="true">✦</span>
+          </span>
           <span className="eyebrow">YOUR LEARNING WORKSPACE</span>
           <h2>{registering ? 'Join your workspace.' : 'Welcome back.'}</h2>
           <p className="muted">
@@ -158,6 +171,7 @@ export function Login({
               ? 'Already have an account? Sign in'
               : 'Have an invitation? Create an account'}
           </button>
+          <p className="login-footnote">A little focus. A lot of possibility.</p>
         </div>
       </section>
     </main>
@@ -185,41 +199,51 @@ export function AccountPanel({ onChanged }: { onChanged: () => void }) {
     }
   }
   return (
-    <section className="panel detail-panel">
-      <h2>Change password</h2>
-      <p className="muted">Changing your password signs out all your sessions.</p>
-      <form onSubmit={submit}>
-        <fieldset className="form-fields" disabled={busy}>
-          <label>
-            Current password
-            <input
-              required
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(e) => setCurrent(e.target.value)}
-            />
-          </label>
-          <label>
-            New password
-            <input
-              required
-              type="password"
-              minLength={12}
-              maxLength={128}
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(e) => setNew(e.target.value)}
-            />
-          </label>
-          {error && (
-            <p role="alert" className="error">
-              {error}
-            </p>
-          )}
-          <button className="primary">{busy ? 'Updating…' : 'Change password'}</button>
-        </fieldset>
-      </form>
-    </section>
+    <>
+      <section className="page-heading compact-heading">
+        <div>
+          <span className="eyebrow">YOUR OWN LITTLE CORNER</span>
+          <h1>Your account</h1>
+          <p className="muted">Keep your sign-in details up to date.</p>
+        </div>
+        <Owl pose="wave" className="heading-owl" />
+      </section>
+      <section className="panel detail-panel account-panel">
+        <h2>Change password</h2>
+        <p className="muted">Changing your password signs out all your sessions.</p>
+        <form onSubmit={submit}>
+          <fieldset className="form-fields" disabled={busy}>
+            <label>
+              Current password
+              <input
+                required
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(e) => setCurrent(e.target.value)}
+              />
+            </label>
+            <label>
+              New password
+              <input
+                required
+                type="password"
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNew(e.target.value)}
+              />
+            </label>
+            {error && (
+              <p role="alert" className="error">
+                {error}
+              </p>
+            )}
+            <button className="primary">{busy ? 'Updating…' : 'Change password'}</button>
+          </fieldset>
+        </form>
+      </section>
+    </>
   );
 }

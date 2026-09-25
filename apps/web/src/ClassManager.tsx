@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { Owl } from './Owl';
 import type { Classroom, ClassMember, Invitation, PageResult } from '@amp/contracts';
 import { request, useResource } from './api';
 export function ClassManager({
@@ -49,7 +50,7 @@ export function ClassManager({
   }
   return (
     <>
-      <section className="page-heading">
+      <section className="page-heading compact-heading">
         <div>
           <span className="eyebrow">LEARN TOGETHER</span>
           <h1>Your classes</h1>
@@ -59,6 +60,7 @@ export function ClassManager({
               : 'Join a class using the code from your teacher.'}
           </p>
         </div>
+        <Owl pose="wave" className="heading-owl" />
       </section>
       <div className="workspace-grid">
         <section className="panel detail-panel">
@@ -138,7 +140,11 @@ export function ClassManager({
                 onChange={onChange}
               />
             ) : (
-              <p className="empty">Choose a class to invite students and review its members.</p>
+              <div className="empty class-empty">
+                <Owl className="detail-owl" />
+                <h2>A place to learn together.</h2>
+                <p>Choose a class to invite students and review its members.</p>
+              </div>
             )}
           </section>
         )}

@@ -6,6 +6,8 @@
 
 代码托管：[GitHub 私有仓库](https://github.com/yunke-l/assignment-management-platform) · [GitHub Actions 检查记录](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml)。查看仓库需要获授权的 GitHub 账号；应用仍在本地运行。
 
+界面采用猫头鹰 Ollie 主题，兼顾亲切的学习氛围与教师的日常工作效率：[设计说明与页面预览](docs/DESIGN.md)。
+
 ## 已实现
 
 - 教师／学生登录、邀请注册、刷新后保持登录、退出撤销会话、修改密码后撤销所有会话。
