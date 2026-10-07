@@ -1,10 +1,12 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-bookworm
     environment:
       POSTGRES_USER: amp
       POSTGRES_PASSWORD: amp_local_only
+      PGPASSWORD: amp_local_only
       POSTGRES_DB: amp
+      POSTGRES_INITDB_ARGS: --auth=scram-sha-256
     ports:
       - '127.0.0.1:5434:5432'
     volumes:

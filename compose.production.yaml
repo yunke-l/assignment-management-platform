@@ -1,11 +1,13 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: postgres:17-bookworm
     restart: unless-stopped
     environment:
       POSTGRES_DB: classwork
       POSTGRES_USER: classwork
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_INITDB_ARGS: --auth=scram-sha-256
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:

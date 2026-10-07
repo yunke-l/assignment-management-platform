@@ -7,11 +7,13 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:17-bookworm
         env:
           POSTGRES_USER: amp
           POSTGRES_PASSWORD: test_only_password
+          PGPASSWORD: test_only_password
           POSTGRES_DB: amp_test
+          POSTGRES_INITDB_ARGS: --auth=scram-sha-256
         ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U amp -d amp_test"
@@ -19,6 +21,7 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://amp:test_only_password@localhost:5432/amp_test
     steps:
+      - run: git config --global init.defaultBranch main
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -48,6 +51,7 @@ jobs:
       RELEASE_TAG: audit-${{ github.run_id }}
       COMPOSE_PROJECT_NAME: classwork-audit-${{ github.run_id }}
     steps:
+      - run: git config --global init.defaultBranch main
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker compose -f compose.production.yaml config --quiet
       - run: docker build --check .
@@ -73,5 +77,8 @@ jobs:
           JS
       - name: Validate HTTPS proxy configuration
         run: docker run --rm -e DOMAIN -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Inspect container runtime logs
+        if: always()
+        run: docker compose -f compose.production.yaml logs --no-color app db
       - if: always()
         run: docker compose -f compose.production.yaml down --volumes --remove-orphans

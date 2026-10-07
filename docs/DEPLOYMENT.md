@@ -8,6 +8,8 @@ One built Node application serves both `/api` and the Vite build from the same o
 
 Production requires PostgreSQL and an exact HTTPS `WEB_ORIGIN`. Demo seeding is refused. Session cookies are HttpOnly, Secure and SameSite=Lax; state-changing browser requests must have the expected Origin. No JWT secret is needed; session and invitation tokens are random opaque values stored as SHA-256 hashes.
 
+The supplied PostgreSQL 17 image uses Debian Bookworm with system locales. Fresh clusters explicitly require SCRAM password authentication for both network and Unix-socket connections; maintenance tools inside the database container receive the same password through `PGPASSWORD`. Keep the Compose environment private. Initialization settings do not modify an existing volume. If upgrading an earlier Alpine-based cluster, retain its previous image for backup and restore into a fresh Bookworm volume; do not change the libc/locale environment underneath an existing database directory.
+
 ## First deployment
 
 Install Docker with Compose on your chosen host and point a domain to it. From the repository root:
