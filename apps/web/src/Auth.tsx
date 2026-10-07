@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import type { Actor } from '@amp/contracts';
 import { request } from './api';
 import { Brand, Owl } from './Owl';
+import { useConfirm } from './ConfirmDialog';
+import { useBeforeUnload, useWork, useWorkGuard } from './WorkProtection';
 export type Session = { token: string; user: Actor };
 export function Login({
   onLogin,
@@ -11,12 +13,14 @@ export function Login({
   notice: string;
 }) {
   const [registering, setRegistering] = useState(false);
+  const confirm = useConfirm();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [invitation, setInvitation] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  useBeforeUnload(!!(name || invitation) || (registering && !!(email || password)) || busy);
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
@@ -161,7 +165,18 @@ export function Login({
           <button
             className="text-button"
             disabled={busy}
-            onClick={() => {
+            onClick={async () => {
+              if (
+                registering &&
+                (name || invitation || password) &&
+                !(await confirm({
+                  title: 'Leave account setup?',
+                  description:
+                    'Your password will be cleared. Your name, email and invitation stay on this page until it is refreshed.',
+                  confirmLabel: 'Go to sign in',
+                }))
+              )
+                return;
               setRegistering((v) => !v);
               setError('');
               setPassword('');
@@ -178,12 +193,15 @@ export function Login({
   );
 }
 export function AccountPanel({ onChanged }: { onChanged: () => void }) {
+  const work = useWork();
   const [currentPassword, setCurrent] = useState('');
   const [newPassword, setNew] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  useWorkGuard('password', !!(currentPassword || newPassword), busy);
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (busy || !(await work.allowSignOut(true))) return;
     setBusy(true);
     setError('');
     try {
@@ -191,6 +209,7 @@ export function AccountPanel({ onChanged }: { onChanged: () => void }) {
         method: 'POST',
         body: JSON.stringify({ currentPassword, newPassword }),
       });
+      work.clearAll();
       onChanged();
     } catch (e) {
       setError((e as Error).message);

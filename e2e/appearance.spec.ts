@@ -44,7 +44,8 @@ test('owl design stays usable across sign-in, editing, class management and acco
     ).toBeInViewport();
   }
   await page.getByLabel('Title', { exact: true }).fill('A little discovery: woodland wildlife');
-  await page.getByLabel('Deadline · your local time').fill('2035-10-01T12:00');
+  await page.getByLabel('Deadline date', { exact: true }).fill('2035-10-01');
+  await page.getByLabel('Deadline time', { exact: true }).fill('12:00');
   await page
     .getByLabel('Question text', { exact: true })
     .fill('Which animal is most active at night?');
@@ -58,6 +59,7 @@ test('owl design stays usable across sign-in, editing, class management and acco
   }
   await capture(page, `${prefix}-editor`);
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
   await navigation.getByRole('button', { name: 'Classes', exact: true }).click();
   await page.getByRole('button', { name: 'English · Group A', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invite students', exact: true })).toBeVisible();
@@ -69,7 +71,7 @@ test('owl design stays usable across sign-in, editing, class management and acco
   await page.setViewportSize({ width: 320, height: 800 });
   await navigation.getByRole('button', { name: 'Assignments', exact: true }).click();
   await page.getByRole('button', { name: '+ New assignment', exact: true }).click();
-  await expect(page.getByLabel('Deadline · your local time')).toBeVisible();
+  await expect(page.getByLabel('Deadline date', { exact: true })).toBeVisible();
   await capture(page, `${prefix}-narrow-editor`);
   await page.setViewportSize({ width: 768, height: 1024 });
   await capture(page, `${prefix}-tablet-editor`);

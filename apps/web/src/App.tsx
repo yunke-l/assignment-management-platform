@@ -14,8 +14,17 @@ import { AssignmentForm } from './AssignmentForm';
 import { Login, AccountPanel, type Session } from './Auth';
 import { ClassManager } from './ClassManager';
 import { Brand, Owl, WorkspaceIcon } from './Owl';
+import {
+  WorkProvider,
+  hasPageWork,
+  useBeforeUnload,
+  useWork,
+  useWorkDraft,
+  useWorkGuard,
+} from './WorkProtection';
+import { useConfirm } from './ConfirmDialog';
 const dateLabel = (value: string) =>
-  new Date(value).toLocaleString(undefined, {
+  new Date(value).toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -28,6 +37,8 @@ export function App() {
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  // Keep warning about volatile work while re-authenticating after session expiry.
+  useBeforeUnload(!session && hasPageWork());
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -71,14 +82,16 @@ export function App() {
       </main>
     );
   return session ? (
-    <Workspace
-      key={session.user.id}
-      session={session}
-      onLogout={() => {
-        setSession(null);
-        setNotice('You have been signed out.');
-      }}
-    />
+    <WorkProvider key={session.user.id} userId={session.user.id}>
+      <Workspace
+        key={session.user.id}
+        session={session}
+        onLogout={() => {
+          setSession(null);
+          setNotice('You have been signed out.');
+        }}
+      />
+    </WorkProvider>
   ) : (
     <Login
       notice={notice}
@@ -92,6 +105,9 @@ export function App() {
 
 function Workspace({ session, onLogout }: { session: Session; onLogout: () => void }) {
   const { token, user } = session;
+  const work = useWork();
+  const confirm = useConfirm();
+  const [resuming, setResuming] = useState<string | null>(null);
   const teacher = user.role === 'TEACHER';
   const [page, setPage] = useState(1);
   const [revision, setRevision] = useState(0);
@@ -118,10 +134,12 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
   if (statusFilter) params.set('status', statusFilter);
   if (search) params.set('search', search);
   async function logout() {
+    if (!(await work.allowSignOut())) return;
     setLoggingOut(true);
     setLogoutError('');
     try {
       await request('/auth/logout', token, { method: 'POST' });
+      work.clearAll();
       onLogout();
     } catch (e) {
       setLogoutError((e as Error).message);
@@ -146,6 +164,18 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
     token,
     revision,
   );
+  useEffect(() => {
+    if (resuming && detail.data?.id === resuming) {
+      if (detail.data.status === 'DRAFT') {
+        setEditing(detail.data);
+        setComposing(true);
+      }
+      setResuming(null);
+    }
+  }, [detail.data, resuming]);
+  const unfinished = Object.entries(work.entries).filter(([key]) =>
+    /^(assignment:|answers:)/.test(key),
+  );
   return (
     <div className="workspace">
       <aside className="sidebar">
@@ -157,7 +187,10 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
               key={item}
               className={section === item ? 'nav-current' : 'nav-link'}
               aria-current={section === item ? 'page' : undefined}
-              onClick={() => setSection(item)}
+              disabled={work.busy}
+              onClick={() => {
+                if (section !== item) void work.navigate(() => setSection(item));
+              }}
             >
               <WorkspaceIcon name={item} />
               {item === 'assignments' ? 'Assignments' : item === 'classes' ? 'Classes' : 'Account'}
@@ -180,7 +213,11 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
             <small>{teacher ? 'Teacher' : 'Student'}</small>
           </div>
         </div>
-        <button className="text-button signout" disabled={loggingOut} onClick={() => void logout()}>
+        <button
+          className="text-button signout"
+          disabled={loggingOut || work.busy}
+          onClick={() => void logout()}
+        >
           Sign out
         </button>
       </aside>
@@ -203,6 +240,71 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
             {logoutError}
           </p>
         )}
+        {!work.storageAvailable && unfinished.length > 0 && (
+          <p className="error" role="status">
+            Browser storage is unavailable. Your work is kept while this page stays open. Save
+            before refreshing.
+          </p>
+        )}
+        {unfinished.length > 0 && (
+          <details className="work-recovery" open={!composing && !selected}>
+            <summary>
+              Work in progress <span>{unfinished.length}</span>
+            </summary>
+            <p>
+              Kept in this tab until saved or signed out. These changes have not been submitted.
+            </p>
+            <div>
+              {unfinished.map(([key, entry]) => (
+                <div className="recovery-item" key={key}>
+                  <button
+                    key={key}
+                    className="secondary"
+                    disabled={work.busy}
+                    onClick={() =>
+                      void work.navigate(() => {
+                        setSection('assignments');
+                        setDetailRequest((v) => v + 1);
+                        if (key === 'assignment:new') {
+                          setEditing(undefined);
+                          setSelected(null);
+                          setComposing(true);
+                        } else {
+                          const id = key.split(':')[1]!;
+                          setSelected(id);
+                          setComposing(false);
+                          setResuming(key.startsWith('assignment:') ? id : null);
+                        }
+                      })
+                    }
+                  >
+                    Resume {entry.label}
+                  </button>
+                  <button
+                    className="text-button danger"
+                    disabled={work.busy}
+                    aria-label={`Discard local copy of ${entry.label}`}
+                    onClick={async () => {
+                      if (
+                        await confirm({
+                          title: 'Discard this local copy?',
+                          description:
+                            'Only unfinished work in this tab will be removed. Saved assignments and submitted answers will stay unchanged.',
+                          danger: true,
+                        })
+                      ) {
+                        work.set(key, null);
+                        if (key === `assignment:${editing?.id ?? 'new'}`) setComposing(false);
+                      }
+                    }}
+                  >
+                    Discard
+                  </button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
         {section === 'classes' ? (
           <ClassManager
             token={token}
@@ -216,7 +318,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           <AccountPanel onChanged={onLogout} />
         ) : (
           <>
-            <section className="page-heading assignment-heading">
+            <section className="page-heading assignment-heading" hidden={composing}>
               <div className="heading-copy">
                 <span className="eyebrow">
                   {teacher ? 'A LITTLE STRUCTURE. ROOM TO GROW.' : 'STAY CURIOUS. KEEP GROWING.'}
@@ -230,6 +332,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                 {teacher && (
                   <button
                     className="primary"
+                    disabled={work.busy}
                     onClick={() => {
                       setEditing(undefined);
                       setComposing(true);
@@ -248,8 +351,8 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                 <Owl pose={teacher ? 'reading' : 'wave'} />
               </div>
             </section>
-            <div className="workspace-grid">
-              <section className="panel list-panel" ref={listPanel}>
+            <div className={`workspace-grid ${composing ? 'editor-mode' : ''}`}>
+              <section className="panel list-panel" ref={listPanel} hidden={composing}>
                 <div className="panel-title">
                   <h2>Assignments</h2>
                   <span className="count">{list.data?.total ?? '—'}</span>
@@ -343,6 +446,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                   <button
                     className={`assignment-row ${selected === item.id ? 'selected' : ''}`}
                     key={item.id}
+                    disabled={work.busy}
                     onClick={() => {
                       setSelected(item.id);
                       setComposing(false);
@@ -383,14 +487,18 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                 </div>
               </section>
               <section
-                className="panel detail-panel"
+                className={`panel detail-panel ${composing ? 'editor-panel' : ''}`}
                 ref={detailPanel}
                 aria-label="Assignment details"
               >
                 {(selected || composing) && (
                   <button
-                    className="text-button detail-back"
-                    onClick={() => listPanel.current?.scrollIntoView({ block: 'start' })}
+                    className={`text-button detail-back ${composing ? 'editor-back' : ''}`}
+                    disabled={work.busy}
+                    onClick={() => {
+                      if (composing) setComposing(false);
+                      else listPanel.current?.scrollIntoView({ block: 'start' });
+                    }}
                   >
                     ↑ Back to assignments
                   </button>
@@ -403,6 +511,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                       token={token}
                       classes={classes.data}
                       onCancel={() => setComposing(false)}
+                      onCreateClass={() => setSection('classes')}
                       onCreated={(id) => {
                         setComposing(false);
                         setSelected(id);
@@ -481,11 +590,41 @@ function AssignmentView({
   onEdit: () => void;
   onDeleted: () => void;
 }) {
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const work = useWork();
+  const [answerDraft, setAnswerDraft, clearAnswers, hasAnswers] = useWorkDraft<{
+    answers: Record<string, number>;
+    retry: { fingerprint: string; id: string } | null;
+  }>(`answers:${assignment.id}`, { answers: {}, retry: null }, assignment.title, {
+    validate: (
+      value,
+    ): value is {
+      answers: Record<string, number>;
+      retry: { fingerprint: string; id: string } | null;
+    } => {
+      if (!value || typeof value !== 'object') return false;
+      const v = value as typeof answerDraft;
+      return (
+        !!v.answers &&
+        typeof v.answers === 'object' &&
+        Object.entries(v.answers).every(([id, choice]) =>
+          assignment.questions.some(
+            (q) =>
+              q.id === id && Number.isInteger(choice) && choice >= 0 && choice < q.options.length,
+          ),
+        ) &&
+        (v.retry === null ||
+          (!!v.retry && typeof v.retry.fingerprint === 'string' && typeof v.retry.id === 'string'))
+      );
+    },
+  });
+  const answers = answerDraft.answers;
+  useEffect(() => {
+    if (assignment.submission && hasAnswers) clearAnswers();
+  }, [assignment.submission, hasAnswers]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const retry = useRef<{ fingerprint: string; id: string } | null>(null);
+  useWorkGuard(`assignment-action:${assignment.id}`, false, busy);
   const closed = new Date(assignment.dueAt) <= new Date();
   async function act(action: 'publish' | 'submit') {
     if (busy) return;
@@ -500,13 +639,17 @@ function AssignmentView({
           selectedIndex: answers[q.id],
         }));
         const fingerprint = JSON.stringify(values);
-        if (retry.current?.fingerprint !== fingerprint)
-          retry.current = { fingerprint, id: crypto.randomUUID() };
+        const retry =
+          answerDraft.retry?.fingerprint === fingerprint
+            ? answerDraft.retry
+            : { fingerprint, id: crypto.randomUUID() };
+        setAnswerDraft((old) => ({ ...old, retry }));
         await request<Submission>(`/assignments/${assignment.id}/submissions`, token, {
           method: 'POST',
-          body: JSON.stringify({ requestId: retry.current.id, answers: values }),
+          body: JSON.stringify({ requestId: retry.id, answers: values }),
         });
       }
+      if (action === 'submit') clearAnswers();
       onChange();
     } catch (e) {
       setError((e as Error).message);
@@ -519,6 +662,8 @@ function AssignmentView({
     setError('');
     try {
       await request(`/assignments/${assignment.id}`, token, { method: 'DELETE' });
+      work.set(`assignment:${assignment.id}`, null);
+      work.set(`answers:${assignment.id}`, null);
       onDeleted();
     } catch (e) {
       setError((e as Error).message);
@@ -585,7 +730,9 @@ function AssignmentView({
                 name={q.id}
                 value={i}
                 checked={answers[q.id] === i}
-                onChange={() => setAnswers((prev) => ({ ...prev, [q.id]: i }))}
+                onChange={() =>
+                  setAnswerDraft((old) => ({ ...old, answers: { ...old.answers, [q.id]: i } }))
+                }
               />
               {option}
               {teacher && q.correctIndex === i && <small>Answer key</small>}
@@ -615,7 +762,7 @@ function AssignmentView({
           </button>
           {confirmDelete && (
             <div role="alert">
-              <p>Delete this draft and all its questions?</p>
+              <p>Delete this draft, its questions and any unsaved edits in this tab?</p>
               <button className="secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>
                 Keep draft
               </button>
@@ -626,10 +773,15 @@ function AssignmentView({
           )}
         </div>
       )}
+      {teacher && assignment.status === 'DRAFT' && work.entries[`assignment:${assignment.id}`] && (
+        <p className="footnote">
+          Save or discard your local edits before publishing this assignment.
+        </p>
+      )}
       {teacher && assignment.status === 'DRAFT' && (
         <button
           className="primary wide"
-          disabled={busy || closed}
+          disabled={busy || closed || !!work.entries[`assignment:${assignment.id}`]}
           onClick={() => void act('publish')}
         >
           {busy ? 'Publishing…' : 'Publish to class →'}
@@ -637,7 +789,10 @@ function AssignmentView({
       )}
       {!teacher && !assignment.submission && (
         <>
-          <p className="footnote">One attempt. Review your answers before submitting.</p>
+          <p className="footnote">
+            {hasAnswers ? 'Your answers are kept in this tab but have not been submitted. ' : ''}One
+            attempt. Review your answers before submitting.
+          </p>
           <button
             className="primary wide"
             disabled={

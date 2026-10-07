@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { Owl } from './Owl';
 import type { Classroom, ClassMember, Invitation, PageResult } from '@amp/contracts';
 import { request, useResource } from './api';
+import { useWork, useWorkDraft, useWorkGuard } from './WorkProtection';
+import { useConfirm } from './ConfirmDialog';
 export function ClassManager({
   token,
   teacher,
@@ -17,12 +19,19 @@ export function ClassManager({
   classesError: string;
   onChange: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [invitation, setInvitation] = useState('');
+  const [input, setInput, clearInput] = useWorkDraft(
+    'class-input',
+    { name: '', invitation: '' },
+    'Class input',
+    { persist: false },
+  );
+  const { name, invitation } = input;
+  const work = useWork();
   const [selected, setSelected] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  useWorkGuard('class-input', false, busy);
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
@@ -33,8 +42,7 @@ export function ClassManager({
         method: 'POST',
         body: JSON.stringify(teacher ? { name } : { invitation: invitation.trim() }),
       });
-      setName('');
-      setInvitation('');
+      clearInput();
       setSelected(result.id);
       setNotice(
         teacher
@@ -74,7 +82,7 @@ export function ClassManager({
                     required
                     maxLength={100}
                     value={name}
-                    onChange={(e) => setName(e.target.value)}
+                    onChange={(e) => setInput((old) => ({ ...old, name: e.target.value }))}
                   />
                 </label>
               ) : (
@@ -83,7 +91,7 @@ export function ClassManager({
                   <input
                     required
                     value={invitation}
-                    onChange={(e) => setInvitation(e.target.value)}
+                    onChange={(e) => setInput((old) => ({ ...old, invitation: e.target.value }))}
                   />
                 </label>
               )}
@@ -120,6 +128,7 @@ export function ClassManager({
               <button
                 key={c.id}
                 className={`assignment-row ${selected === c.id ? 'selected' : ''}`}
+                disabled={work.busy}
                 onClick={() => setSelected(c.id)}
               >
                 {c.name}
@@ -165,12 +174,19 @@ function ClassDetails({
 }) {
   const [revision, setRevision] = useState(0);
   const [page, setPage] = useState(1);
-  const [hours, setHours] = useState(48);
-  const [maxUses, setMaxUses] = useState(1);
-  const [code, setCode] = useState('');
+  const [draft, setDraft] = useWorkDraft(
+    `invite:${id}`,
+    { hours: 48, maxUses: 1, code: '', invitationId: '' },
+    `Invitation for ${name}`,
+    { persist: false },
+  );
+  const { hours, maxUses, code } = draft;
+  const [copyNotice, setCopyNotice] = useState('');
+  const confirm = useConfirm();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [removing, setRemoving] = useState<ClassMember | null>(null);
+  useWorkGuard(`class-action:${id}`, false, busy);
   const members = useResource<PageResult<ClassMember>>(
     `/classes/${id}/members?page=${page}&pageSize=10`,
     token,
@@ -185,8 +201,11 @@ function ClassDetails({
         method,
         ...(body ? { body: JSON.stringify(body) } : {}),
       });
-      if (result.token) setCode(result.token);
-      else setCode('');
+      if (result.token) {
+        setDraft((old) => ({ ...old, code: result.token!, invitationId: result.id }));
+        setCopyNotice('');
+      } else if (method === 'DELETE' && path.endsWith(`/invitations/${draft.invitationId}`))
+        setDraft((old) => ({ ...old, code: '', invitationId: '' }));
       setRemoving(null);
       setPage(1);
       setRevision((v) => v + 1);
@@ -195,6 +214,29 @@ function ClassDetails({
       setError((e as Error).message);
     } finally {
       setBusy(false);
+    }
+  }
+  async function generate() {
+    if (busy) return;
+    if (
+      code &&
+      !(await confirm({
+        title: 'Generate another invitation?',
+        description:
+          'Copy the current code first. A new code will replace this display; the previous invitation will stay active until it expires or is revoked.',
+        confirmLabel: 'Generate new code',
+        cancelLabel: 'Keep current code',
+      }))
+    )
+      return;
+    await act(`/classes/${id}/invitations`, 'POST', { expiresInHours: hours, maxUses });
+  }
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopyNotice('Copied. Share this code privately.');
+    } catch {
+      setCopyNotice('Copy is unavailable. Select the code and copy it manually.');
     }
   }
   return (
@@ -209,7 +251,7 @@ function ClassDetails({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          void act(`/classes/${id}/invitations`, 'POST', { expiresInHours: hours, maxUses });
+          void generate();
         }}
       >
         <fieldset className="form-fields" disabled={busy}>
@@ -222,7 +264,7 @@ function ClassDetails({
                 min={1}
                 max={168}
                 value={hours}
-                onChange={(e) => setHours(Number(e.target.value))}
+                onChange={(e) => setDraft((old) => ({ ...old, hours: Number(e.target.value) }))}
               />
             </label>
             <label>
@@ -233,19 +275,50 @@ function ClassDetails({
                 min={1}
                 max={100}
                 value={maxUses}
-                onChange={(e) => setMaxUses(Number(e.target.value))}
+                onChange={(e) => setDraft((old) => ({ ...old, maxUses: Number(e.target.value) }))}
               />
             </label>
           </div>
-          <button className="secondary">Generate invitation</button>
+          <div className="preset-row" aria-label="Invitation duration presets">
+            {[24, 48, 168].map((value) => (
+              <button
+                type="button"
+                className="preset"
+                aria-pressed={hours === value}
+                key={value}
+                onClick={() => setDraft((old) => ({ ...old, hours: value }))}
+              >
+                {value === 168 ? '7 days' : `${value} hours`}
+              </button>
+            ))}
+          </div>
+          <button className="primary">{busy ? 'Generating…' : 'Generate invitation'}</button>
         </fieldset>
       </form>
       {code && (
-        <label>
-          New invitation code
-          <textarea readOnly value={code} onFocus={(e) => e.target.select()} />
-          <span className="footnote">Copy and share privately. This code is shown only once.</span>
-        </label>
+        <div className="invitation-code">
+          <label htmlFor={`invite-code-${id}`}>New invitation code</label>
+          <textarea
+            id={`invite-code-${id}`}
+            readOnly
+            value={code}
+            onFocus={(e) => e.target.select()}
+            aria-describedby={`invite-help-${id}`}
+          />
+          <div className="copy-row">
+            <span id={`invite-help-${id}`}>
+              Kept while this page stays open. Copy before refreshing or signing out.
+            </span>
+            <button type="button" className="secondary" onClick={() => void copyCode()}>
+              Copy code
+            </button>
+          </div>
+          {copyNotice && (
+            <p role="status" className="copy-status">
+              {copyNotice}
+            </p>
+          )}
+        </div>
       )}
       {error && (
         <p role="alert" className="error">
@@ -263,7 +336,7 @@ function ClassDetails({
         <div className="invite-row" key={invite.id}>
           <span>
             Invitation {index + 1} · {invite.uses}/{invite.maxUses} used
-            <small>Expires {new Date(invite.expiresAt).toLocaleString()}</small>
+            <small>Expires {new Date(invite.expiresAt).toLocaleString('en-US')}</small>
           </span>
           <button
             className="text-button danger"

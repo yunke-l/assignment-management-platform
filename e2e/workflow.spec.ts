@@ -1,5 +1,11 @@
 import { test, expect, type Page } from '@playwright/test';
 const password = 'LocalStudy2026!';
+test.beforeEach(async ({ page }) => {
+  page.on(
+    'dialog',
+    (dialog) => void (dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss()),
+  );
+});
 async function login(page: Page, email = 'teacher@example.test') {
   await page.goto('/');
   await page.getByLabel('Email', { exact: true }).fill(email);
@@ -51,7 +57,8 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
     await page
       .getByRole('combobox', { name: 'Class', exact: true })
       .selectOption({ label: className });
-    await page.getByLabel('Deadline · your local time').fill('2035-10-01T12:00');
+    await page.getByLabel('Deadline date', { exact: true }).fill('2035-10-01');
+    await page.getByLabel('Deadline time', { exact: true }).fill('12:00');
     await page.getByLabel('Question text', { exact: true }).fill('What is 2 + 2?');
     for (const [letter, value] of [
       ['A', '4'],
@@ -189,16 +196,21 @@ test('question option limits, correct-answer reindexing and draft deletion work 
   const title = `Editor ${info.project.name} ${Date.now()}`;
   await page.getByRole('button', { name: '+ New assignment', exact: true }).click();
   await page.getByLabel('Title', { exact: true }).fill(title);
-  await page.getByLabel('Deadline · your local time').fill('2035-10-01T12:00');
+  await page.getByLabel('Deadline date', { exact: true }).fill('2035-10-01');
+  await page.getByLabel('Deadline time', { exact: true }).fill('12:00');
   await page.getByLabel('Question text', { exact: true }).fill('Which option is selected?');
   for (const letter of ['A', 'B', 'C', 'D'])
     await page.getByLabel(`Option ${letter}`, { exact: true }).fill(`Original ${letter}`);
-  const correct = page.getByRole('combobox', { name: 'Correct answer', exact: true });
-  await correct.selectOption('3');
+  const correct = (letter: string) =>
+    page.getByRole('radio', {
+      name: `Mark option ${letter} as correct for question 1`,
+      exact: true,
+    });
+  await correct('D').check();
   await page.getByRole('button', { name: 'Remove option B from question 1', exact: true }).click();
-  await expect(correct).toHaveValue('2');
+  await expect(correct('C')).toBeChecked();
   await page.getByRole('button', { name: 'Remove option C from question 1', exact: true }).click();
-  await expect(correct).toHaveValue('0');
+  await expect(correct('A')).toBeChecked();
   await expect(page.getByRole('button', { name: /Remove option/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
   await expect(page.getByRole('radio')).toHaveCount(2);
@@ -210,7 +222,7 @@ test('question option limits, correct-answer reindexing and draft deletion work 
   await expect(
     page.getByRole('button', { name: 'Add option to question 1', exact: true }),
   ).toBeDisabled();
-  await correct.selectOption('5');
+  await correct('F').check();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('radio')).toHaveCount(6);
   await expect(page.getByText('Answer key').locator('..')).toContainText('Extra F');

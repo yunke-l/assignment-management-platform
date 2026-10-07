@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import { createApp } from '../apps/api/src/app.js';
 import { Database } from '../apps/api/src/database/database.js';
 import { migrate } from '../apps/api/src/database/migrate.js';
@@ -12,6 +13,12 @@ process.env.DEMO_PASSWORD = 'LocalStudy2026!';
 process.env.WEB_ORIGIN = 'http://127.0.0.1:5175';
 async function main() {
   const app = await createApp(true);
+  // Every browser test shares loopback. Allow its burst of synthetic sign-ins in
+  // this in-memory server only; production and HTTP-test limits stay unchanged.
+  const limiter = app.get<ThrottlerStorage>(ThrottlerStorage);
+  const increment = limiter.increment.bind(limiter);
+  limiter.increment = (key, ttl, limit, blockDuration, name) =>
+    increment(key, ttl, Math.max(limit, 1000), blockDuration, name);
   const db = app.get(Database);
   await migrate(db);
   await seed(db);
