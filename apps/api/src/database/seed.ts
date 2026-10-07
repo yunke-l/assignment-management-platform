@@ -1,5 +1,6 @@
 import { hashPassword } from '../auth/password.js';
 import { Database } from './database.js';
+import { passwordSchema } from '@amp/contracts';
 
 export const ids = {
   teacher: '10000000-0000-4000-8000-000000000001',
@@ -14,9 +15,9 @@ export async function seed(db: Database) {
     throw new Error('Demo seeding requires ALLOW_DEMO_SEED=true outside production.');
   }
   const password = process.env.DEMO_PASSWORD;
-  if (!password || password.length < 12)
-    throw new Error('Set DEMO_PASSWORD to at least 12 characters.');
-  const hash = await hashPassword(password);
+  if (!passwordSchema.safeParse(password).success)
+    throw new Error('Set DEMO_PASSWORD to 12–128 characters.');
+  const hash = await hashPassword(password!);
   await db.transaction(async (tx) => {
     for (const [id, email, name, role] of [
       [ids.teacher, 'teacher@example.test', 'Alex Morgan', 'TEACHER'],

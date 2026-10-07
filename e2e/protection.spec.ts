@@ -49,11 +49,21 @@ async function fixture(page: Page, title: string, publish = false) {
 }
 const row = (page: Page, title: string) =>
   page.getByRole('button').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
+const browserProblems = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
+  const problems: string[] = [];
+  browserProblems.set(page, problems);
+  page.on('pageerror', (error) => problems.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'warning') problems.push(message.text());
+  });
   page.on(
     'dialog',
     (dialog) => void (dialog.type() === 'beforeunload' ? dialog.accept() : dialog.dismiss()),
   );
+});
+test.afterEach(async ({ page }) => {
+  expect(browserProblems.get(page)).toEqual([]);
 });
 
 test('new work survives navigation and reload; cancellation, undo and sign-out protect it', async ({
@@ -323,4 +333,87 @@ test('unavailable storage keeps work in memory and a pending save blocks navigat
   await expect(
     page.getByRole('button', { name: 'Resume New assignment', exact: true }),
   ).toHaveCount(0);
+});
+
+test('an invalid success response preserves the complete assignment until a real save succeeds', async ({
+  page,
+}, info) => {
+  await login(page);
+  const title = `Invalid response ${info.project.name} ${Date.now()}`;
+  await fillAssignment(page, title);
+  await page.route(
+    '**/api/assignments',
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'text/html',
+        body: '<html>Temporary proxy response</html>',
+      }),
+    { times: 1 },
+  );
+  await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Invalid response from the server');
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
+  await expect(page.getByLabel('Option D', { exact: true })).toHaveValue('Answer D');
+  await page.reload();
+  await page.getByRole('button', { name: 'Resume New assignment', exact: true }).click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
+  await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit draft', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Resume New assignment', exact: true }),
+  ).toHaveCount(0);
+});
+
+test('discarding conflicted edits reloads the current saved version without a browser refresh', async ({
+  page,
+}, info) => {
+  await login(page);
+  const title = `Conflict recovery ${info.project.name} ${Date.now()}`;
+  const original = await fixture(page, title);
+  await page.reload();
+  await page.getByLabel('Search title').fill(title);
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await row(page, title).click();
+  await page.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  await page.getByLabel('Title', { exact: true }).fill('Local stale title');
+  const changedTitle = `${title} updated elsewhere`;
+  const changed = await page.request.patch(`/api/assignments/${original.id}`, {
+    headers: { Origin: origin },
+    data: {
+      classId: original.classId,
+      title: changedTitle,
+      description: '',
+      dueAt: original.dueAt,
+      version: original.version,
+      questions: [
+        { prompt: 'Current server question', options: ['One', 'Two'], correctIndex: 1, points: 20 },
+      ],
+    },
+  });
+  expect(changed.ok(), await changed.text()).toBe(true);
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue('Local stale title');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('button', { name: 'Discard changes', exact: true }).click();
+  await expect(
+    page
+      .getByRole('region', { name: 'Assignment details', exact: true })
+      .getByRole('heading', { name: changedTitle, exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(changedTitle);
+  await expect(page.getByRole('textbox', { name: 'Question text', exact: true })).toHaveValue(
+    'Current server question',
+  );
+  await expect(
+    page.getByRole('radio', { name: 'Mark option B as correct for question 1' }),
+  ).toBeChecked();
+  await page.getByLabel('Title', { exact: true }).fill(`${title} resolved`);
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit draft', exact: true })).toBeVisible();
+  const saved = await (await page.request.get(`/api/assignments/${original.id}`)).json();
+  expect(saved.title).toBe(`${title} resolved`);
+  expect(saved.version).toBe(original.version + 2);
 });

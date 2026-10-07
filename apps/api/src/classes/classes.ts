@@ -83,7 +83,7 @@ export class ClassesService {
     const [invitation] = await this.db.query(
       `INSERT INTO invitations(id,token_hash,kind,class_id,max_uses,expires_at)
       VALUES ($1,$2,'CLASS',$3,$4,clock_timestamp()+$5 * interval '1 hour')
-      RETURNING id,expires_at::text AS "expiresAt",max_uses AS "maxUses",uses,revoked_at::text AS "revokedAt"`,
+      RETURNING id,expires_at AS "expiresAt",max_uses AS "maxUses",uses,revoked_at AS "revokedAt"`,
       [randomUUID(), digest(token), id, input.maxUses, input.expiresInHours],
     );
     return { ...invitation, token };
@@ -91,7 +91,7 @@ export class ClassesService {
   async invitations(actor: Actor, id: string) {
     await this.own(actor, id);
     return this.db.query(
-      `SELECT id,expires_at::text AS "expiresAt",max_uses AS "maxUses",uses,revoked_at::text AS "revokedAt" FROM invitations WHERE class_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND uses<max_uses ORDER BY created_at DESC,id DESC`,
+      `SELECT id,expires_at AS "expiresAt",max_uses AS "maxUses",uses,revoked_at AS "revokedAt" FROM invitations WHERE class_id=$1 AND revoked_at IS NULL AND expires_at>clock_timestamp() AND uses<max_uses ORDER BY created_at DESC,id DESC`,
       [id],
     );
   }

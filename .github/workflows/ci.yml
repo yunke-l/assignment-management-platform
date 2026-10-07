@@ -4,7 +4,7 @@ permissions:
   contents: read
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17-alpine
@@ -19,8 +19,8 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://amp:test_only_password@localhost:5432/amp_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -28,9 +28,10 @@ jobs:
       - run: npm run check
       - run: node scripts/recovery-drill.mjs
       - run: npm run format:check
+      - run: npm audit --audit-level=low
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: browser-verification
@@ -39,3 +40,38 @@ jobs:
             test-results/
             docs/evidence/recovery.json
           retention-days: 14
+  container:
+    runs-on: ubuntu-24.04
+    env:
+      DOMAIN: classwork.invalid
+      POSTGRES_PASSWORD: ci_container_fixture_only
+      RELEASE_TAG: audit-${{ github.run_id }}
+      COMPOSE_PROJECT_NAME: classwork-audit-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: docker compose -f compose.production.yaml config --quiet
+      - run: docker build --check .
+      - run: docker compose -f compose.production.yaml build app
+      - run: docker compose -f compose.production.yaml run --rm app node apps/api/dist/database/cli.js migrate
+      - run: docker compose -f compose.production.yaml up -d --wait app
+      - name: Verify production image and compiled assets
+        run: |
+          docker compose -f compose.production.yaml exec -T app node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = 'http://127.0.0.1:3100';
+          const page = await fetch(origin);
+          assert.equal(page.status, 200);
+          assert.match(page.headers.get('content-security-policy'), /default-src 'self'/);
+          const html = await page.text();
+          assert.match(html, /Classwork/);
+          const assets = [...html.matchAll(/(?:src|href)="([^" ]+\.(?:js|css))"/g)];
+          assert.ok(assets.length >= 2);
+          for (const [, asset] of assets) assert.equal((await fetch(new URL(asset, origin))).status, 200);
+          assert.deepEqual(await (await fetch(`${origin}/api/health`)).json(), { status: 'ok' });
+          assert.equal((await fetch(`${origin}/api/assignments`)).status, 401);
+          console.log('Production container, migrations, headers, assets and API passed.');
+          JS
+      - name: Validate HTTPS proxy configuration
+        run: docker run --rm -e DOMAIN -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - if: always()
+        run: docker compose -f compose.production.yaml down --volumes --remove-orphans

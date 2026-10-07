@@ -185,5 +185,6 @@ export function useWorkDraft<T>(
         : { value: next, label, persist: options.persist ?? true },
     );
   };
-  return [value, update, () => set(key, null), !!usable] as const;
+  const clear = useCallback(() => set(key, null), [key, set]);
+  return [value, update, clear, !!usable] as const;
 }

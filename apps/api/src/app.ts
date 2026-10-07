@@ -3,7 +3,7 @@ import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@n
 import { NestFactory } from '@nestjs/core';
 import { randomUUID } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
-import { static as serveStatic } from 'express';
+import { json, static as serveStatic } from 'express';
 import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
@@ -14,14 +14,38 @@ import { cookieName } from './auth/session.js';
 class ApiErrorFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
+    const parserStatus =
+      error instanceof Error &&
+      'type' in error &&
+      'status' in error &&
+      [
+        'entity.too.large',
+        'encoding.unsupported',
+        'charset.unsupported',
+        'request.size.invalid',
+        'request.aborted',
+      ].includes(String(error.type)) &&
+      [400, 413, 415].includes(Number(error.status))
+        ? Number(error.status)
+        : undefined;
     const status =
-      error instanceof ZodError ? 400 : error instanceof HttpException ? error.getStatus() : 500;
+      error instanceof ZodError
+        ? 400
+        : error instanceof HttpException
+          ? error.getStatus()
+          : (parserStatus ?? 500);
     const message =
       error instanceof ZodError
         ? error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
         : error instanceof HttpException
           ? error.message
-          : 'An unexpected error occurred.';
+          : parserStatus === 413
+            ? 'Request body is too large.'
+            : parserStatus === 415
+              ? 'Unsupported request encoding.'
+              : parserStatus === 400
+                ? 'Invalid request body.'
+                : 'An unexpected error occurred.';
     if (status === 500) Logger.error(error instanceof Error ? error.stack : error, 'API');
     res
       .status(status)
@@ -30,6 +54,7 @@ class ApiErrorFilter implements ExceptionFilter {
 }
 export async function createApp(quiet = false) {
   const app = await NestFactory.create(AppModule, {
+    bodyParser: false,
     logger: quiet ? false : ['error', 'warn', 'log'],
   });
   app.setGlobalPrefix('api');
@@ -71,6 +96,9 @@ export async function createApp(quiet = false) {
     }
     next();
   });
+  // The contract permits 20 questions with Unicode text: more than Express's
+  // default 100 KiB, while still bounding parsing before controller validation.
+  app.use(json({ limit: 512 * 1024 }));
   app.useGlobalFilters(new ApiErrorFilter());
   if (process.env.SERVE_WEB === 'true')
     app.use(serveStatic(fileURLToPath(new URL('../../web/dist/', import.meta.url))));

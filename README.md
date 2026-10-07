@@ -28,7 +28,7 @@
 
 ## 本地启动（不需要 Docker）
 
-需要 Node.js 22.12+，验证使用 Node 24。在此目录运行：
+需要 Node.js 22.13+（22.x）或 24+，验证使用 Node 24。在此目录运行：
 
 ```sh
 npm ci
@@ -94,7 +94,7 @@ npm run format:check
 npm run test:recovery
 ```
 
-`check` 包括应用、脚本和测试文件的类型检查、开发进程回归测试、HTTP 集成测试、生产构建及编译入口冒烟检查。`test:recovery` 使用新建的合成 PGlite 数据目录，验证离线备份、恢复、凭据撤销和历史成绩，不触碰本地演示库。默认集成测试使用独立内存 PGlite；真实 PostgreSQL 测试必须指向空的、可丢弃的专用数据库：
+`check` 包括零警告 ESLint 检查、应用/脚本/测试文件的类型检查、开发进程回归测试、前端请求处理测试、HTTP 集成测试、生产构建及编译入口冒烟检查。`test:recovery` 使用新建的合成 PGlite 数据目录，验证离线备份、恢复、凭据撤销和历史成绩，不触碰本地演示库。默认集成测试使用独立内存 PGlite；真实 PostgreSQL 测试必须指向空的、可丢弃的专用数据库：
 
 ```sh
 TEST_DATABASE_URL=postgresql://amp:test_only_password@localhost:5432/amp_test npm run check
@@ -140,7 +140,7 @@ deploy/                   HTTPS 代理及环境变量示例
 
 ## 部署与边界
 
-[部署、迁移、回滚和恢复说明](docs/DEPLOYMENT.md) 包含 Docker/Caddy/PostgreSQL 命令。本地 PGlite 离线恢复已通过；代码已接入私有 GitHub 仓库，CI 的各次结果以 Actions 检查记录为准。当前没有应用托管部署；本机没有 Docker，容器栈及生产 PostgreSQL 备份恢复尚需在目标环境验证。
+[部署、迁移、回滚和恢复说明](docs/DEPLOYMENT.md) 包含 Docker/Caddy/PostgreSQL 命令。本地 PGlite 离线恢复已通过；代码已接入私有 GitHub 仓库，CI 的各次结果以 Actions 检查记录为准。CI 的 `container` 任务构建生产镜像，运行 PostgreSQL 迁移、静态资源/API 冒烟检查及 Caddy 配置校验。当前没有应用托管部署；公网 HTTPS 及生产 PostgreSQL 备份恢复仍需在目标环境验证。
 
 当前版本不含手工批改、附件、多次作答、AI 批改、邮件自动发送、忘记密码自助恢复和分布式限流。会话固定七天后过期。筛选使用大小写不敏感的标题子串匹配；分页在每次请求内使用一致快照，跨页面浏览期间若数据发生增删，需刷新列表。
 

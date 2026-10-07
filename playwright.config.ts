@@ -1,4 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
+// Playwright propagates FORCE_COLOR to workers. Keep an inherited no-color
+// preference without passing the contradictory pair that makes Node warn.
+if (process.env.NO_COLOR !== undefined) {
+  process.env.FORCE_COLOR = '0';
+  delete process.env.NO_COLOR;
+}
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,

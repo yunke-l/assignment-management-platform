@@ -18,9 +18,13 @@ import type {
 import { Database, type Connection } from '../database/database.js';
 
 const projection = `a.id, a.class_id AS "classId", c.name AS "className", a.title, a.description,
-  a.status, a.version, a.due_at::text AS "dueAt", a.created_at::text AS "createdAt"`;
-const submissionProjection = `id, assignment_id AS "assignmentId", score, max_score AS "maxScore", submitted_at::text AS "submittedAt"`;
-type StoredAssignment = Assignment & { teacherId: string } & Record<string, unknown>;
+  a.status, a.version, a.due_at AS "dueAt", a.created_at AS "createdAt"`;
+const submissionProjection = `id, assignment_id AS "assignmentId", score, max_score AS "maxScore", submitted_at AS "submittedAt"`;
+type StoredAssignment = Omit<Assignment, 'dueAt' | 'createdAt'> & {
+  teacherId: string;
+  dueAt: Date;
+  createdAt: Date;
+} & Record<string, unknown>;
 type StoredQuestion = {
   id: string;
   prompt: string;

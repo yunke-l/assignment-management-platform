@@ -17,15 +17,28 @@ export async function request<T>(path: string, token?: string, init: RequestInit
       ...init.headers,
     },
   });
-  const body = await response.json().catch(() => ({}));
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    init.signal?.throwIfAborted();
+    if (response.ok) throw new ApiError('Invalid response from the server. Please retry.', 502);
+  }
+  init.signal?.throwIfAborted();
   if (!response.ok) {
     if (
       response.status === 401 &&
       !['/auth/login', '/auth/register', '/auth/password', '/auth/me'].includes(path)
     )
       window.dispatchEvent(new Event('session-expired'));
-    throw new ApiError(body.message ?? `Request failed (${response.status}).`, response.status);
+    const message =
+      body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
+        ? body.message
+        : `Request failed (${response.status}).`;
+    throw new ApiError(message, response.status);
   }
+  if (!body || typeof body !== 'object')
+    throw new ApiError('Invalid response from the server. Please retry.', 502);
   return body as T;
 }
 export function useResource<T>(path: string | null, token: string, revision = 0) {

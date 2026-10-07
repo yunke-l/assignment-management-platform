@@ -1,24 +1,24 @@
 {
-  "verifiedAt": "2026-09-24T23:29:53.615Z",
+  "verifiedAt": "2026-10-07T20:51:15.284Z",
   "node": "v24.5.0",
   "pglite": "0.5.8",
   "method": "Offline directory copy after clean shutdown; restore to a separate, previously absent directory with the same PGlite version.",
   "scope": "Synthetic local PGlite fixture only. Does not establish PostgreSQL pg_dump recovery, cross-version compatibility or production disaster recovery.",
-  "fixtureDirectory": ".local/recovery-drill-KeAxVH",
-  "backupMs": 543,
-  "restoreAndVerifyMs": 1459,
+  "fixtureDirectory": ".local/recovery-drill-ZHLDKt",
+  "backupMs": 2966,
+  "restoreAndVerifyMs": 2512,
   "tables": {
     "schema_migrations": {
       "count": 3,
-      "sha256": "95038126fdd46b66fe8bddd5fe4935d98bd031e483382687d55aceb59247a272"
+      "sha256": "279dbc45321485aed259edf272fbeed75fea6b0ae67e97787b8daf66737b431a"
     },
     "users": {
       "count": 4,
-      "sha256": "318e06511f7f6cc10d5cda2d1a6ae5dbe0d8f47e3edb6a881d658f150c38008b"
+      "sha256": "186bd9baec0b3093b5141347fd3f0e3e9be4fa0fbd9ef621a3811fb5ba791059"
     },
     "classrooms": {
       "count": 2,
-      "sha256": "01d22fd0ab9d0220756ece171b2475cc390db4adf17f631c754195a090f4311f"
+      "sha256": "6d1ebd2b71806a223e87f2ff577e402532f2c80cc1ccd5249ebdb23a17f68f95"
     },
     "class_memberships": {
       "count": 2,
@@ -26,27 +26,27 @@
     },
     "assignments": {
       "count": 1,
-      "sha256": "25aa3b10813f36b7082e70cb15404e5087d1515e85d55c1baddb7bc9176e7ec5"
+      "sha256": "a27b54c3a7b76b65ab396e3ce98ba0bdac3ec2385c5ffa7fbabed614395d43ca"
     },
     "questions": {
       "count": 1,
-      "sha256": "c5d82990408cfda76e569653aa7b10bb78695ab59d1d3b4ee01eeaf77c88fe1e"
+      "sha256": "799a4ccddaa240d60277fbff46fcfc4bef59110e4c6b743d16044eee6ee3666e"
     },
     "assignment_recipients": {
       "count": 1,
-      "sha256": "8a465e1ab5e0e1073ddbdd75d5c127d85083b4713e652835be2b457f61259406"
+      "sha256": "ef81efc1c258583da3ae1a6433af003584846cab8de9cd679ee0713afeaf4b32"
     },
     "submissions": {
       "count": 1,
-      "sha256": "031a6449486bc3addab672bed61706d9a72bce561b70e955559335f10be1d1f6"
+      "sha256": "2e9802e3b3459dbd7325432fd627249be4447427b9d69ecb46905826a751f680"
     },
     "invitations": {
       "count": 1,
-      "sha256": "5065efd08dd4c818295cb9dd89f63c41e16320c6f2661b0143faebc71362a480"
+      "sha256": "741a62cf73fba41d978a3f37222a762efd15ff57999f7cda0301c72276c19adc"
     },
     "sessions": {
       "count": 2,
-      "sha256": "b1785904ceaf07eb3b9e7701e507153343146d58433577107904a77e750f24d8"
+      "sha256": "a02f23222d59c6c9962d715a4e1a46c3bcba549605082d2c6b1a0dda68136f1e"
     }
   },
   "assertions": [

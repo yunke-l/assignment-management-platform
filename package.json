@@ -7,7 +7,7 @@
     "packages/*"
   ],
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.13.0 || >=24.0.0"
   },
   "scripts": {
     "dev": "npm run build -w @amp/contracts && concurrently -k -n api,web \"npm run dev -w @amp/api\" \"npm run dev -w @amp/web\"",
@@ -17,7 +17,9 @@
     "build": "npm run build -w @amp/contracts && npm run build -w @amp/api && npm run build -w @amp/web",
     "typecheck": "npm run build -w @amp/contracts && npm run typecheck -w @amp/api && npm run typecheck -w @amp/web && tsc -p tsconfig.tools.json",
     "test": "npm run build -w @amp/contracts && npm run test -w @amp/api",
-    "check": "npm run typecheck && npm run test:dev && npm test && npm run build && npm run test:built",
+    "check": "npm run lint && npm run typecheck && npm run test:dev && npm run test:web && npm test && npm run build && npm run test:built",
+    "lint": "eslint . --max-warnings 0",
+    "test:web": "tsx --test apps/web/test/*.test.ts",
     "test:dev": "node --test scripts/dev-process.test.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -28,10 +30,18 @@
     "test:built": "node scripts/smoke-built.mjs",
     "test:recovery": "npm run build && node scripts/recovery-drill.mjs"
   },
+  "overrides": {
+    "shell-quote": "^1.11.0"
+  },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.63.0",
     "concurrently": "^9.2.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^16.5.0",
     "prettier": "^3.9.9",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.71.1"
   }
 }

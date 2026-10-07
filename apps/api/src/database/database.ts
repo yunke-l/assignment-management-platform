@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
 import { settings } from '../config.js';
@@ -27,6 +27,9 @@ export class Database implements Connection, OnModuleDestroy {
         connectionTimeoutMillis: 5000,
         statement_timeout: 10000,
       });
+      // pg removes failed idle clients itself; observe the error so Node does
+      // not turn a recoverable database disconnect into a process crash.
+      this.pool.on('error', (error) => Logger.error(error.message, error.stack, 'Database'));
     }
   }
   async query<T extends Record<string, unknown>>(
@@ -53,6 +56,13 @@ export class Database implements Connection, OnModuleDestroy {
       );
     }
     const client = await this.pool!.connect();
+    let connectionError: Error | undefined;
+    let discard = false;
+    const onConnectionError = (error: Error) => {
+      connectionError = error;
+    };
+    // A checked-out client can fail between two queries as well as during one.
+    client.on('error', onConnectionError);
     try {
       await client.query('BEGIN');
       const result = await work({
@@ -62,13 +72,21 @@ export class Database implements Connection, OnModuleDestroy {
           await client.query(sql);
         },
       });
+      if (connectionError) throw connectionError;
       await client.query('COMMIT');
       return result;
     } catch (error) {
-      await client.query('ROLLBACK');
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // Keep the original failure and never return a broken transaction to
+        // the pool when rollback could not restore the connection.
+        discard = true;
+      }
       throw error;
     } finally {
-      client.release();
+      client.release(discard || !!connectionError);
+      client.off('error', onConnectionError);
     }
   }
   async onModuleDestroy() {

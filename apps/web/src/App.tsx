@@ -510,7 +510,10 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                       initial={editing}
                       token={token}
                       classes={classes.data}
-                      onCancel={() => setComposing(false)}
+                      onCancel={() => {
+                        setComposing(false);
+                        setRevision((v) => v + 1);
+                      }}
                       onCreateClass={() => setSection('classes')}
                       onCreated={(id) => {
                         setComposing(false);
@@ -620,7 +623,7 @@ function AssignmentView({
   const answers = answerDraft.answers;
   useEffect(() => {
     if (assignment.submission && hasAnswers) clearAnswers();
-  }, [assignment.submission, hasAnswers]);
+  }, [assignment.submission, hasAnswers, clearAnswers]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);

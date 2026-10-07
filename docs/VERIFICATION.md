@@ -2,6 +2,8 @@
 
 Date: 2026-09-24. Delivery scope confirmed by the user: local application plus deployment preparation; no public application deployment in this task. The user subsequently requested private GitHub source hosting.
 
+The September records below are historical. The latest code audit and current test totals are in [Code audit, 2026-10-07](#code-audit-2026-10-07).
+
 ## Completed checks
 
 | Check                                                         | Result                                                                   |
@@ -59,11 +61,11 @@ All evidence uses synthetic data. These are automated workflow recordings, not e
 
 ## Remaining external verification
 
-- Docker is not installed on this host. Dockerfile, Compose and Caddy configuration are supplied, but their container/TLS deployment must be tested on a Docker host.
+- Docker is not installed on this host. The current CI `container` job builds and smoke-tests the production image with PostgreSQL and validates Caddy configuration. Check the commit's hosted result before deployment; public TLS remains a target-environment check.
 - Source hosting is configured at [the private GitHub repository](https://github.com/yunke-l/assignment-management-platform). Hosted CI results and artifacts are available per commit in [GitHub Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml); local results above do not by themselves prove a hosted run succeeded.
 - No public domain/HTTPS deployment, production backup restore, failover or long-running load test has been completed. See [deployment and recovery](DEPLOYMENT.md) for the commands and acceptance steps.
 - Mobile coverage uses Chromium viewport/touch emulation, not physical iOS/Safari hardware. This is not a comprehensive assistive-technology audit.
-- Vite builds report two non-failing third-party Zod PURE-comment warnings; the compiler strips those comments and the generated application passes the built-entry smoke test.
+- The September build's two third-party Zod PURE-comment warnings were corrected in the October code audit below.
 
 Do not describe synthetic data sizes, this single local latency sample, or generated implementation as production users, uptime guarantees, measured commercial impact or independently demonstrated interview proficiency.
 
@@ -102,3 +104,38 @@ Final local results: **18/18 browser cases passed**, full TypeScript checks pass
 Computer Use repeated the teacher flow at 1280×900 and 390×844: fill an assignment, choose native deadline controls, switch to Classes and back, remove/undo the correct option, keep working from the discard dialog, save, edit again, check the publication guard, resume and save. After the last protection change, the mobile edit/navigation/undo/keep/save flow was repeated. The saved title, instructions and answer key remained correct. The phone viewport and document width were both 390px; the option controls and save actions remained visible and usable. Empty-submit validation focused the title and showed field errors. Unsaved reload restoration is established by the automated tests; Computer Use's reload attempt was stopped by the warning and is not counted as a completed recovery test.
 
 Evidence: [desktop editor](evidence/controls-desktop.png), [Computer Use phone editor](evidence/controls-mobile.jpg), [discard confirmation](evidence/controls-confirmation.jpg). Tests and screenshots use synthetic accounts in an isolated in-memory database. The regular local demo database was not opened. Temporary servers are stopped after verification. Mobile evidence uses a resized browser, not a physical phone or an on-screen keyboard audit.
+
+## Code audit, 2026-10-07
+
+Reviewed the application sources, shared contracts, SQL migrations, operator and development scripts, test fixtures, build configuration and deployment files. This audit fixes observed failures and adds repeatable checks; it does not establish that all possible inputs, browsers or deployment environments are defect-free.
+
+Corrections:
+
+- PostgreSQL idle-client and checked-out transaction connection errors no longer become unhandled events that crash the API. Failed rollback preserves the original error and discards the unusable client. An isolated child-process regression first reproduced the crash; both idle and transaction termination now reconnect successfully.
+- The JSON parser now accepts the full contract-sized Unicode assignment and returns a traceable 413 for oversized bodies. Invalid production origins with credentials, query strings or fragments are rejected. Demo seed passwords must satisfy the same 12–128-character contract as sign-in.
+- Assignment, submission and invitation timestamps no longer expose PostgreSQL display-format strings. They serialize as portable ISO timestamps. Before these fixes, regressions failed for Unicode payloads, oversized bodies, timestamp format and malformed production origins.
+- Non-JSON/null/primitive success responses are rejected instead of allowing save callers to discard unfinished content. Cancellation remains cancellation, and non-JSON error bodies retain their HTTP status. Browser tests verify that a failed save survives reload and can be retried.
+- Cancelling conflicted edits refreshes the server detail before reopening the editor. A desktop/mobile regression confirms that the latest title, question, answer key and version can be edited and saved without refreshing the browser.
+- The answer-cleanup effect now has complete dependencies and a stable callback. ESLint checks hooks and unused code with zero warnings allowed; TypeScript also checks unused locals/parameters and includes all test fixtures.
+- Updated vulnerable source-map-js and shell-quote dependencies; concurrently's pinned shell-quote dependency uses a compatible patched override. `npm audit --audit-level=low` reports **0 vulnerabilities**. Supported Node versions are 22.13+ within 22.x, or 24+; Node 23 is excluded because ESLint 10 does not support it.
+- A narrowly scoped Vite transform corrects two invalid PURE-directive references in Zod 4.6.5 prose comments. Executable code and real optimization annotations remain unchanged; warning reporting is not disabled. Production builds now emit no warnings. Playwright also avoids passing contradictory NO_COLOR/FORCE_COLOR variables to child processes.
+- CI actions use pinned current releases and Node 24 runtimes; the runner is explicitly Ubuntu 24.04. CI includes dependency auditing and the production-container verification described above.
+
+Current local evidence (Node 24.5.0, macOS ARM64):
+
+| Check                                     | Result                                                                                                                      |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                           | Passed: lint, all TypeScript targets, process/web/API regressions, production build and compiled-entry smoke                |
+| PostgreSQL suite, isolated port 55433     | **47 passed**, 0 failed, 0 skipped; includes multi-connection concurrency and termination recovery                          |
+| PGlite suite                              | **40 passed**, 0 failed; 7 PostgreSQL-only checks skipped and verified separately above                                     |
+| Development process regressions           | **5 passed**                                                                                                                |
+| Frontend response-handling regressions    | **6 passed**                                                                                                                |
+| Desktop/mobile Chromium browser suite     | **22 passed**; protection scenarios also assert no unhandled page errors or browser warnings                                |
+| Dependency audit                          | **0 vulnerabilities** at all severities                                                                                     |
+| Prettier and whitespace checks            | Passed                                                                                                                      |
+| Compiled application backup/restore drill | Passed; all 10 table counts/digests, credential revocation and historical scores verified                                   |
+| Synthetic query script                    | Completed against a fresh `_bench` database; 50 successful requests per route; see [measurement and limits](PERFORMANCE.md) |
+
+The recovery and benchmark JSON files now record this audit's runs. Recovery copied the fixture in 2,966 ms and restored/verified it in 2,512 ms; these are local measurements, not recovery guarantees. Computer Use also exercised the current teacher UI: validation, creating/saving/publishing a synthetic assignment, class-member confirmation, account navigation and the 390px editor. The two injected-response/concurrent-editor boundaries are established by automated browser tests, not claimed as manual fault injection. The normal `.local/database` was never opened by this audit.
+
+Hosted verification is recorded per commit in [GitHub Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml). The `check` job runs the complete suite on PostgreSQL; `container` independently validates the built production environment. Neither job constitutes public deployment, production disaster recovery, long-duration load testing or physical iOS/Safari validation.

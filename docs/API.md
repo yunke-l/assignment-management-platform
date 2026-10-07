@@ -2,7 +2,7 @@
 
 Base path `/api`. JSON requests/responses; UUID identifiers; accepted uppercase hex digits are normalized to lowercase before identity comparisons and idempotency hashing. Browser requests use the same-origin HttpOnly session cookie. API clients can use `Authorization: Bearer <opaque token>` returned by login/registration. Unsafe browser requests must carry the exact configured Origin. This release replaces the starter's JWTs: old credentials must sign in again.
 
-Errors contain `{statusCode,message,requestId}` and responses include `x-request-id`. Validation errors return 400, unauthenticated/expired/revoked sessions 401, wrong roles/Origin 403, missing or other-owner resources 404, version/finality conflicts 409, rate limits 429, unexpected failures 500. Internal error details are not sent to clients.
+Errors contain `{statusCode,message,requestId}` and responses include `x-request-id`. Validation errors return 400, unauthenticated/expired/revoked sessions 401, wrong roles/Origin 403, missing or other-owner resources 404, version/finality conflicts 409, oversized JSON bodies 413, unsupported request encodings 415, rate limits 429, unexpected failures 500. Internal error details are not sent to clients. JSON parsing is bounded at 512 KiB, enough for the maximum assignment permitted by the contract, including Unicode text. Timestamp responses use ISO 8601 with a time-zone designator; input deadlines must also include a time zone.
 
 ## Sessions and registration
 
