@@ -1,3 +1,18 @@
 {$DOMAIN} {
-	reverse_proxy app:3100
+	@fileUpload {
+		method POST
+		path_regexp upload ^/api/assets/uploads/[0-9a-fA-F-]+/content$
+	}
+	handle @fileUpload {
+		request_body {
+			max_size 52445184
+		}
+		reverse_proxy app:3100
+	}
+	handle {
+		request_body {
+			max_size 2097152
+		}
+		reverse_proxy app:3100
+	}
 }

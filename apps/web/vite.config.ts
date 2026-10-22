@@ -17,6 +17,16 @@ export default defineConfig({
     },
     react(),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        // Cache the shared UI runtime separately from changing application code.
+        manualChunks: {
+          ui: ['react', 'react-dom', '@mantine/core', '@mantine/hooks', 'react-router-dom'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,

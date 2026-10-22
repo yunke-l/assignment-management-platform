@@ -11,8 +11,11 @@ COPY packages packages
 RUN npm run build && npm prune --omit=dev
 
 FROM node:24-bookworm-slim AS runtime
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3100 SERVE_WEB=true
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3100 SERVE_WEB=true ASSET_DIRECTORY=/app/private-assets
 WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /app/private-assets && chown node:node /app/private-assets && chmod 700 /app/private-assets
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/package.json ./package.json
 COPY --from=build --chown=node:node /app/apps/api/package.json ./apps/api/package.json

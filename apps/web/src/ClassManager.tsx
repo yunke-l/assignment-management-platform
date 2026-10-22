@@ -1,3 +1,4 @@
+import { FormFieldset, InputField, Button, TextAreaField } from './Controls';
 import { useState, type FormEvent } from 'react';
 import { Owl } from './Owl';
 import type { Classroom, ClassMember, Invitation, PageResult } from '@amp/contracts';
@@ -74,11 +75,11 @@ export function ClassManager({
         <section className="panel detail-panel">
           <h2>{teacher ? 'Create a class' : 'Join a class'}</h2>
           <form onSubmit={submit}>
-            <fieldset className="form-fields" disabled={busy}>
+            <FormFieldset className="form-fields" disabled={busy}>
               {teacher ? (
                 <label>
                   Class name
-                  <input
+                  <InputField
                     required
                     maxLength={100}
                     value={name}
@@ -88,7 +89,7 @@ export function ClassManager({
               ) : (
                 <label>
                   Invitation code
-                  <input
+                  <InputField
                     required
                     value={invitation}
                     onChange={(e) => setInput((old) => ({ ...old, invitation: e.target.value }))}
@@ -100,10 +101,10 @@ export function ClassManager({
                   {error}
                 </p>
               )}
-              <button className="primary">
+              <Button className="primary">
                 {busy ? 'Saving…' : teacher ? 'Create class' : 'Join class'}
-              </button>
-            </fieldset>
+              </Button>
+            </FormFieldset>
           </form>
           {notice && (
             <p role="status" className="result">
@@ -117,22 +118,22 @@ export function ClassManager({
           {classesError && (
             <p role="alert" className="error">
               {classesError}
-              <button className="secondary" onClick={onChange}>
+              <Button className="secondary" onClick={onChange}>
                 Retry classes
-              </button>
+              </Button>
             </p>
           )}
           {!classesLoading && !classesError && !classes.length && <p>No classes yet.</p>}
           {classes.map((c) =>
             teacher ? (
-              <button
+              <Button
                 key={c.id}
                 className={`assignment-row ${selected === c.id ? 'selected' : ''}`}
                 disabled={work.busy}
                 onClick={() => setSelected(c.id)}
               >
                 {c.name}
-              </button>
+              </Button>
             ) : (
               <p key={c.id}>{c.name}</p>
             ),
@@ -254,11 +255,11 @@ function ClassDetails({
           void generate();
         }}
       >
-        <fieldset className="form-fields" disabled={busy}>
+        <FormFieldset className="form-fields" disabled={busy}>
           <div className="form-row">
             <label>
               Expires in hours
-              <input
+              <InputField
                 required
                 type="number"
                 min={1}
@@ -269,7 +270,7 @@ function ClassDetails({
             </label>
             <label>
               Maximum uses
-              <input
+              <InputField
                 required
                 type="number"
                 min={1}
@@ -281,7 +282,7 @@ function ClassDetails({
           </div>
           <div className="preset-row" aria-label="Invitation duration presets">
             {[24, 48, 168].map((value) => (
-              <button
+              <Button
                 type="button"
                 className="preset"
                 aria-pressed={hours === value}
@@ -289,16 +290,16 @@ function ClassDetails({
                 onClick={() => setDraft((old) => ({ ...old, hours: value }))}
               >
                 {value === 168 ? '7 days' : `${value} hours`}
-              </button>
+              </Button>
             ))}
           </div>
-          <button className="primary">{busy ? 'Generating…' : 'Generate invitation'}</button>
-        </fieldset>
+          <Button className="primary">{busy ? 'Generating…' : 'Generate invitation'}</Button>
+        </FormFieldset>
       </form>
       {code && (
         <div className="invitation-code">
           <label htmlFor={`invite-code-${id}`}>New invitation code</label>
-          <textarea
+          <TextAreaField
             id={`invite-code-${id}`}
             readOnly
             value={code}
@@ -309,9 +310,9 @@ function ClassDetails({
             <span id={`invite-help-${id}`}>
               Kept while this page stays open. Copy before refreshing or signing out.
             </span>
-            <button type="button" className="secondary" onClick={() => void copyCode()}>
+            <Button type="button" className="secondary" onClick={() => void copyCode()}>
               Copy code
-            </button>
+            </Button>
           </div>
           {copyNotice && (
             <p role="status" className="copy-status">
@@ -329,7 +330,7 @@ function ClassDetails({
       {invites.error && (
         <p role="alert" className="error">
           {invites.error}
-          <button onClick={() => setRevision((v) => v + 1)}>Retry invitations</button>
+          <Button onClick={() => setRevision((v) => v + 1)}>Retry invitations</Button>
         </p>
       )}
       {invites.data?.map((invite, index) => (
@@ -338,13 +339,13 @@ function ClassDetails({
             Invitation {index + 1} · {invite.uses}/{invite.maxUses} used
             <small>Expires {new Date(invite.expiresAt).toLocaleString('en-US')}</small>
           </span>
-          <button
+          <Button
             className="text-button danger"
             disabled={busy}
             onClick={() => void act(`/classes/${id}/invitations/${invite.id}`, 'DELETE')}
           >
             Revoke invitation {index + 1}
-          </button>
+          </Button>
         </div>
       ))}
       <h3 className="section-title">Members {members.data ? `(${members.data.total})` : ''}</h3>
@@ -352,7 +353,7 @@ function ClassDetails({
       {members.error && (
         <p role="alert" className="error">
           {members.error}
-          <button onClick={() => setRevision((v) => v + 1)}>Retry members</button>
+          <Button onClick={() => setRevision((v) => v + 1)}>Retry members</Button>
         </p>
       )}
       {members.data?.total === 0 && <p>No students have joined yet.</p>}
@@ -362,13 +363,13 @@ function ClassDetails({
             {member.name}
             <small>{member.email}</small>
           </span>
-          <button
+          <Button
             className="text-button danger"
             disabled={busy}
             onClick={() => setRemoving(member)}
           >
             Remove {member.name}
-          </button>
+          </Button>
         </div>
       ))}
       {removing && (
@@ -378,31 +379,31 @@ function ClassDetails({
             will be kept.
           </p>
           <div className="draft-actions">
-            <button className="secondary" disabled={busy} onClick={() => setRemoving(null)}>
+            <Button className="secondary" disabled={busy} onClick={() => setRemoving(null)}>
               Cancel removal
-            </button>
-            <button
+            </Button>
+            <Button
               className="primary"
               disabled={busy}
               onClick={() => void act(`/classes/${id}/members/${removing.id}`, 'DELETE')}
             >
               Confirm removal
-            </button>
+            </Button>
           </div>
         </div>
       )}
       {members.data && (
         <div className="pagination">
-          <button disabled={page === 1 || busy} onClick={() => setPage((v) => v - 1)}>
+          <Button disabled={page === 1 || busy} onClick={() => setPage((v) => v - 1)}>
             Previous members
-          </button>
+          </Button>
           <span>Page {page}</span>
-          <button
+          <Button
             disabled={page * 10 >= members.data.total || busy}
             onClick={() => setPage((v) => v + 1)}
           >
             Next members
-          </button>
+          </Button>
         </div>
       )}
     </>

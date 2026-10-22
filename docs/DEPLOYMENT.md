@@ -42,21 +42,25 @@ Share the resulting one-use code privately. It expires after 48 hours and only t
 ## Releases and rollback
 
 1. Run `npm run check`, real PostgreSQL tests and `npm run test:e2e`; require CI success.
-2. Keep the previous image release tag and create a database backup before migration.
+2. Keep the previous image release tag and create a paired database and private-media backup before migration.
 3. Build the new immutable release image. Run the migration command, then deploy the new app. If migration fails, its transaction rolls back; leave the old app running and fix the migration in a new release.
 4. Check health, sign in, create a throwaway class and validate normal use. Remove any unpublished test draft through the UI.
 5. For an application-only regression with a backward-compatible schema, restore the previous `RELEASE_TAG` and run `up -d --no-build app`. Verify that the tag already exists locally or pull it from your image registry.
 6. Do not roll back this session migration to the original JWT starter: its authentication and membership rules differ. For an incompatible schema rollback, stop application writes and restore the paired backup into a fresh database, then deploy the matching image. Restoring an old backup discards later writes; choose a restore point deliberately.
 
+Once schema-v2 assignments exist, the old single-choice UI/API cannot read them correctly. Reverting only the application image is therefore not a compatible rollback for this upgrade. Use the matching pre-upgrade database/media recovery point, or ship a forward fix; account for writes after that recovery point before restoring.
+
 ## Verified local recovery
 
-Run `npm run test:recovery` for a self-contained drill with synthetic PGlite data. The script creates a new fixture under `.local/recovery-drill-*`, writes an assignment and submission through the API, closes the database cleanly, copies it, and opens the copy in a separate fresh directory using the same PGlite version. It compares all ten table counts and logical data digests, checks migrations, revokes restored credentials, and verifies fresh logins and preserved teacher/student results. It does not open `.local/database` or read a database URL from `.env`.
+Run `npm run test:recovery` for a self-contained drill with synthetic PGlite data. The script creates a new fixture under `.local/recovery-drill-*`, writes an assignment and submission through the API, closes the database cleanly, copies it, and opens the copy in a separate fresh directory using the same PGlite version. It compares all fifteen table counts and logical data digests plus original/derived media SHA-256 manifests, checks migrations, revokes restored credentials, and verifies fresh logins and preserved teacher/student results. It does not open `.local/database` or read a database URL from `.env`.
 
 This drill passed locally; [recovery.json](evidence/recovery.json) records its environment and assertions. Copying a running database directory is not this procedure. See [PGlite close](https://pglite.dev/docs/api#close) for clean shutdown. This local offline copy does not establish cross-version compatibility or production PostgreSQL recovery.
 
 ## Production PostgreSQL backup and restore drill
 
 Run backups on the database host or with matching PostgreSQL 17 client tools. The following uses the database container's `pg_dump`; use a new output filename for every backup. Backups contain private user and answer data. Keep access restricted, copy encrypted backups off-host, and define retention with the deployment owner.
+
+The dump below is only the database component. For this release, follow [the paired media procedure](#private-media-storage-and-paired-backups) at the same recovery point; a database-only dump is not a complete backup.
 
 ```sh
 mkdir -p .local/backups
@@ -87,6 +91,18 @@ This PostgreSQL restore procedure is supplied but has not yet been exercised on 
 - Sessions expire after seven days. Logout revokes the current session; changing a password revokes all sessions. `accounts.js revoke-user EMAIL` revokes current sessions but does not disable the account or prevent another login.
 - Periodically run `accounts.js prune-sessions` to remove sessions expired or revoked more than 30 days ago.
 - On database outages, reads show retry controls. For an uncertain answer submission, keep the page open and retry unchanged answers; the same request ID is reused. Reloading/reopening the assignment retrieves any committed result. Do not retry with fabricated scores or overwrite submissions.
-- File uploads, manual grading, public self-registration, distributed rate limiting, email delivery and automatic password recovery are outside this release.
+- Public registration without invitations, distributed login rate limiting, email delivery and automatic password recovery remain outside this release.
 
 References: [PostgreSQL backup](https://www.postgresql.org/docs/17/backup-dump.html), [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy), [Playwright web server](https://playwright.dev/docs/test-webserver).
+
+## Private media storage and paired backups
+
+The production image installs FFmpeg/ffprobe and the Sharp image decoder. Compose mounts the persistent `asset_data` volume at `/app/private-assets`; `ASSET_DIRECTORY` must be an absolute path in production. The app UID owns this private directory. Keep it outside web static roots, preserve filesystem permissions and size storage for originals plus safe display/thumbnail/transcoded versions. JSON is limited to 2 MiB; the proxy has a separate multipart route allowance of 50 MiB plus 16 KiB framing overhead, while the API enforces each declared file size and exact actual bytes.
+
+Back up assets together with their database references at a coherent point. For a simple offline snapshot, stop app writes and its decoder/cleanup worker (`docker compose ... stop app`), dump PostgreSQL, and archive the entire asset volume before restarting the app. Include a manifest of every relative file key, byte size and SHA-256, and keep it alongside the dump, release tag and migration checksums. Do not combine an old database dump with a media snapshot taken after cleanup removed the files it references. A live backup needs a storage snapshot/retention procedure that guarantees this same invariant.
+
+Restore both into new isolated database/media destinations with the matching release. Verify all assets referenced by published materials and submitted answers exist, match their hashes, and serve authorized display and original variants; check manual grade drafts and revision history. Reset copied processing leases only after the previous worker is stopped and the destination is isolated, then let the persisted worker resume pending jobs. Revoke copied sessions/invitations before accepting live traffic. Keep the existing live database and volume untouched until the isolated drill passes.
+
+The local recovery script now creates real PNG and WAV resources, binds teaching and answer files, publishes a manual grade, and checks all 15 tables plus original/derived manifests after an offline copy. It verifies restored student playback, teacher originals and grading history. This is a same-version synthetic PGlite drill; a Docker/PostgreSQL paired restore still requires validation on the target host.
+
+Monitor available disk space, `assets` counts by status, PROCESSING rows with expired leases, failed error codes, `attempts`, and oldest pending age. A worker leases each job for three minutes; decoder timeouts are at most two minutes. Transient failures retry after 30 seconds, at most three attempts. Cleanup runs periodically and rechecks bindings under locks. Logs must never include original answer content, transcript, credentials or storage paths. The source of truth is DB status/reference metadata rather than the existence of a file alone.

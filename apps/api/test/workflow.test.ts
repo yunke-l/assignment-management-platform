@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { Database } from '../src/database/database.js';
 import { migrate } from '../src/database/migrate.js';
 import { ids, seed } from '../src/database/seed.js';
+import { digest } from '../src/auth/session.js';
 import type { AssignmentDetail } from '@amp/contracts';
 
 process.env.NODE_ENV = 'test';
@@ -40,8 +41,14 @@ const create = async () => {
     .expect(201);
   return res.body as AssignmentDetail;
 };
-const publish = async (id: string) =>
-  http.post(`/api/assignments/${id}/publish`).set('Authorization', auth()).expect(201);
+const publish = async (id: string) => {
+  const detail = await http.get(`/api/assignments/${id}`).set('Authorization', auth()).expect(200);
+  return http
+    .post(`/api/assignments/${id}/publish`)
+    .set('Authorization', auth())
+    .send({ version: detail.body.version })
+    .expect(201);
+};
 const answersFor = (item: AssignmentDetail) =>
   item.questions.map((q) => ({ questionId: q.id, selectedIndex: 0 }));
 
@@ -195,7 +202,21 @@ test('grades on the server and makes exact retries idempotent', async () => {
     "UPDATE assignments SET due_at=clock_timestamp()-interval '1 minute' WHERE id=$1",
     [assignment.id],
   );
-  await http.post(path).set('Authorization', auth('student')).send(input).expect(201);
+  const [session] = await db.query(
+    'SELECT revoked_at IS NULL AS active,expires_at>clock_timestamp() AS valid FROM sessions WHERE token_hash=$1',
+    [digest(tokens.student!)],
+  );
+  assert.deepEqual(session, { active: true, valid: true });
+  const afterDeadline = await Promise.all(
+    Array.from({ length: 12 }, () =>
+      http.post(path).set('Authorization', auth('student')).send(input),
+    ),
+  );
+  for (const replay of afterDeadline) {
+    assert.equal(replay.status, 201, JSON.stringify(replay.body));
+    assert.equal(replay.body.id, first.body.id);
+    assert.equal(replay.body.score, first.body.score);
+  }
 });
 test('computes teacher-only aggregate results', async () => {
   const path = `/api/assignments/${assignment.id}/stats`;

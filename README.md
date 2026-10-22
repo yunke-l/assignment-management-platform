@@ -144,4 +144,4 @@ deploy/                   HTTPS 代理及环境变量示例
 
 当前版本不含手工批改、附件、多次作答、AI 批改、邮件自动发送、忘记密码自助恢复和分布式限流。会话固定七天后过期。筛选使用大小写不敏感的标题子串匹配；分页在每次请求内使用一致快照，跨页面浏览期间若数据发生增删，需刷新列表。
 
-更多设计：[架构](docs/ARCHITECTURE.md)、[API](docs/API.md)、[验证证据](docs/VERIFICATION.md)。不要把合成测试结果表述为真实用户规模或线上性能。
+更多设计：[架构](docs/ARCHITECTURE.md)、[后端解读与初级全栈简历亮点](docs/BACKEND_AND_RESUME.md)、[API](docs/API.md)、[验证证据](docs/VERIFICATION.md)。不要把合成测试结果表述为真实用户规模或线上性能。

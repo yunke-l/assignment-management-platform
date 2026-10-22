@@ -1,4 +1,6 @@
+import { FormFieldset } from './Controls';
 import { useState, type FormEvent } from 'react';
+import { Alert, Button, TextInput } from '@mantine/core';
 import type { Actor } from '@amp/contracts';
 import { request } from './api';
 import { Brand, Owl } from './Owl';
@@ -104,66 +106,61 @@ export function Login({
           </p>
           {notice && <p role="status">{notice}</p>}
           <form onSubmit={submit}>
-            <fieldset className="form-fields" disabled={busy}>
+            <FormFieldset className="form-fields" disabled={busy}>
               {registering && (
                 <>
-                  <label>
-                    Your name
-                    <input
-                      required
-                      maxLength={100}
-                      autoComplete="name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Invitation code
-                    <input
-                      required
-                      autoComplete="off"
-                      value={invitation}
-                      onChange={(e) => setInvitation(e.target.value)}
-                    />
-                  </label>
+                  <TextInput
+                    label="Your name"
+                    required
+                    maxLength={100}
+                    autoComplete="name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                  <TextInput
+                    label="Invitation code"
+                    required
+                    autoComplete="off"
+                    value={invitation}
+                    onChange={(e) => setInvitation(e.target.value)}
+                  />
                 </>
               )}
-              <label>
-                Email
-                <input
-                  required
-                  type="email"
-                  maxLength={254}
-                  autoComplete="username"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </label>
-              <label>
-                Password
-                <input
-                  required
-                  type="password"
-                  minLength={registering ? 12 : 1}
-                  maxLength={128}
-                  autoComplete={registering ? 'new-password' : 'current-password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </label>
+              <TextInput
+                label="Email"
+                required
+                type="email"
+                maxLength={254}
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+              <TextInput
+                label="Password"
+                required
+                type="password"
+                minLength={registering ? 12 : 1}
+                maxLength={128}
+                autoComplete={registering ? 'new-password' : 'current-password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
               {registering && <p className="footnote">Use 12–128 characters for your password.</p>}
               {error && (
-                <p role="alert" className="error">
+                <Alert role="alert" color="red" mt="md">
                   {error}
-                </p>
+                </Alert>
               )}
-              <button className="primary wide">
+              <Button type="submit" fullWidth loading={busy} mt="sm" mb={4}>
                 {busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in →'}
-              </button>
-            </fieldset>
+              </Button>
+            </FormFieldset>
           </form>
-          <button
-            className="text-button"
+          <Button
+            className="auth-switch"
+            variant="subtle"
+            fullWidth
+            mt="md"
             disabled={busy}
             onClick={async () => {
               if (
@@ -185,7 +182,7 @@ export function Login({
             {registering
               ? 'Already have an account? Sign in'
               : 'Have an invitation? Create an account'}
-          </button>
+          </Button>
           <p className="login-footnote">A little focus. A lot of possibility.</p>
         </div>
       </section>
@@ -231,36 +228,34 @@ export function AccountPanel({ onChanged }: { onChanged: () => void }) {
         <h2>Change password</h2>
         <p className="muted">Changing your password signs out all your sessions.</p>
         <form onSubmit={submit}>
-          <fieldset className="form-fields" disabled={busy}>
-            <label>
-              Current password
-              <input
-                required
-                type="password"
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(e) => setCurrent(e.target.value)}
-              />
-            </label>
-            <label>
-              New password
-              <input
-                required
-                type="password"
-                minLength={12}
-                maxLength={128}
-                autoComplete="new-password"
-                value={newPassword}
-                onChange={(e) => setNew(e.target.value)}
-              />
-            </label>
+          <FormFieldset className="form-fields" disabled={busy}>
+            <TextInput
+              label="Current password"
+              required
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+            <TextInput
+              label="New password"
+              required
+              type="password"
+              minLength={12}
+              maxLength={128}
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(e) => setNew(e.target.value)}
+            />
             {error && (
-              <p role="alert" className="error">
+              <Alert role="alert" color="red" mt="md">
                 {error}
-              </p>
+              </Alert>
             )}
-            <button className="primary">{busy ? 'Updating…' : 'Change password'}</button>
-          </fieldset>
+            <Button type="submit" loading={busy}>
+              {busy ? 'Updating…' : 'Change password'}
+            </Button>
+          </FormFieldset>
         </form>
       </section>
     </>

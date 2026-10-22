@@ -1,0 +1,41 @@
+{
+  "measuredAt": "2026-10-09T05:13:29.983Z",
+  "node": "v24.5.0",
+  "os": "darwin",
+  "arch": "arm64",
+  "cpus": 8,
+  "postgres": "PostgreSQL 17.10 on x86_64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.3.2), 64-bit",
+  "transport": "Loopback HTTP, one API process, pg pool maximum 10, warm metadata, synthetic isolated database",
+  "data": {
+    "roots": 20,
+    "leaves": 100,
+    "scoringUnits": 200,
+    "objectiveTypes": 6,
+    "clients": 50,
+    "publishedJsonBytes": 137042,
+    "answerJsonBytes": 29931
+  },
+  "scope": "Local maximum-count legal mixed fixture; no production SLA, physical devices, WAN, sustained/cold-cache or media-transfer claim.",
+  "results": [
+    {
+      "operation": "metadata",
+      "concurrentClients": 50,
+      "requests": 50,
+      "p50Ms": 114.80374999999992,
+      "p95Ms": 187.54812500000003,
+      "maxMs": 193.87824999999998,
+      "targetP95Ms": 1000,
+      "metLocalTarget": true
+    },
+    {
+      "operation": "objective-submit",
+      "concurrentClients": 50,
+      "requests": 50,
+      "p50Ms": 200.874458,
+      "p95Ms": 286.799542,
+      "maxMs": 288.4772909999999,
+      "targetP95Ms": 1000,
+      "metLocalTarget": true
+    }
+  ]
+}

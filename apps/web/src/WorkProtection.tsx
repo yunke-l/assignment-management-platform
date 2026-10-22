@@ -24,10 +24,12 @@ type WorkContextValue = {
   entries: Entries;
   storageAvailable: boolean;
   busy: boolean;
+  uploading: boolean;
+  navigationProtected: boolean;
   set: (key: string, entry: Entry | null) => void;
   clearAll: () => void;
   guard: (key: string, value: Guard | null) => void;
-  navigate: (action: () => void) => Promise<void>;
+  navigate: (action: () => void) => Promise<boolean>;
   allowSignOut: (changingPassword?: boolean) => Promise<boolean>;
 };
 const WorkContext = createContext<WorkContextValue | null>(null);
@@ -59,7 +61,7 @@ export function WorkProvider({ userId, children }: { userId: string; children: R
       return Object.fromEntries(
         Object.entries(data).filter(
           ([key, entry]) =>
-            /^(assignment:|answers:)/.test(key) &&
+            /^(assignment:|answers:|grading:)/.test(key) &&
             entry &&
             typeof entry === 'object' &&
             entry.persist === true &&
@@ -75,8 +77,13 @@ export function WorkProvider({ userId, children }: { userId: string; children: R
   const [guards, setGuards] = useState<Record<string, Guard>>({});
   const confirm = useConfirm();
   const busy = Object.values(guards).some((item) => item.busy);
-  const sensitive = Object.values(guards).some((item) => item.dirty);
-  useBeforeUnload(!!Object.keys(entries).length || sensitive || busy);
+  const uploading = Object.entries(guards).some(
+    ([key, item]) => key.startsWith('upload:') && item.dirty,
+  );
+  const sensitive = Object.entries(guards).some(
+    ([key, item]) => !key.startsWith('upload:') && item.dirty,
+  );
+  useBeforeUnload(!!Object.keys(entries).length || sensitive || uploading || busy);
   const set = useCallback(
     (key: string, entry: Entry | null) => {
       const next = { ...current.current };
@@ -125,8 +132,21 @@ export function WorkProvider({ userId, children }: { userId: string; children: R
         guard,
         storageAvailable,
         busy,
+        uploading,
+        navigationProtected: busy || uploading || sensitive,
         navigate: async (action) => {
-          if (busy) return;
+          if (busy) return false;
+          if (
+            uploading &&
+            !(await confirm({
+              title: 'Leave while files are uploading?',
+              description:
+                'Leaving stops this page’s active transfers. Your assignment and answer edits remain in this tab; interrupted files can be removed or uploaded again.',
+              confirmLabel: 'Leave page',
+              danger: true,
+            }))
+          )
+            return false;
           if (
             !sensitive ||
             (await confirm({
@@ -136,12 +156,17 @@ export function WorkProvider({ userId, children }: { userId: string; children: R
               confirmLabel: 'Leave page',
               danger: true,
             }))
-          )
+          ) {
             action();
+            return true;
+          }
+          return false;
         },
         allowSignOut: async (changingPassword = false) =>
           !busy &&
-          ((!Object.keys(current.current).length && (!sensitive || changingPassword)) ||
+          ((!Object.keys(current.current).length &&
+            !uploading &&
+            (!sensitive || changingPassword)) ||
             (await confirm({
               title: changingPassword
                 ? 'Change password and clear unfinished work?'
@@ -169,15 +194,33 @@ export function useWorkDraft<T>(
   key: string,
   initial: T,
   label: string,
-  options: { persist?: boolean; validate?: (value: unknown) => value is T } = {},
+  options: {
+    persist?: boolean;
+    validate?: (value: unknown) => value is T;
+    recover?: (value: unknown) => T | null;
+  } = {},
 ) {
   const { entries, set } = useWork();
   const baseline = useRef(initial);
   const entry = entries[key];
   const usable = entry && (!options.validate || options.validate(entry.value));
-  const value = usable ? (entry.value as T) : baseline.current;
+  const recovered = useRef<{ source: unknown; value: T | null }>({
+    source: undefined,
+    value: null,
+  });
+  if (entry?.value !== recovered.current.source)
+    recovered.current = {
+      source: entry?.value,
+      value: entry && !usable ? (options.recover?.(entry.value) ?? null) : null,
+    };
+  const value = usable ? (entry.value as T) : (recovered.current.value ?? baseline.current);
+  // Async upload callbacks may outlive the render that started them. Apply their
+  // functional changes to the latest work rather than replacing newer edits.
+  const latest = useRef(value);
+  latest.current = value;
   const update: Dispatch<SetStateAction<T>> = (action) => {
-    const next = typeof action === 'function' ? (action as (old: T) => T)(value) : action;
+    const next = typeof action === 'function' ? (action as (old: T) => T)(latest.current) : action;
+    latest.current = next;
     set(
       key,
       JSON.stringify(next) === JSON.stringify(baseline.current)
@@ -185,6 +228,9 @@ export function useWorkDraft<T>(
         : { value: next, label, persist: options.persist ?? true },
     );
   };
-  const clear = useCallback(() => set(key, null), [key, set]);
-  return [value, update, clear, !!usable] as const;
+  const clear = useCallback(() => {
+    latest.current = baseline.current;
+    set(key, null);
+  }, [key, set]);
+  return [value, update, clear, !!(usable || recovered.current.value)] as const;
 }

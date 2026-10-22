@@ -1,7 +1,12 @@
 import { z } from 'zod';
+import { uuidSchema } from './primitives.js';
+
+export { uuidSchema, limitedText } from './primitives.js';
+export * from './questions.js';
+export * from './assets.js';
+export * from './grading.js';
 
 // PostgreSQL accepts uppercase UUIDs and returns their lowercase canonical form.
-export const uuidSchema = z.uuid().transform((value) => value.toLowerCase());
 
 export const loginSchema = z
   .object({

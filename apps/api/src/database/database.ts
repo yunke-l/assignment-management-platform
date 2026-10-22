@@ -15,6 +15,7 @@ export interface Connection {
 export class Database implements Connection, OnModuleDestroy {
   private readonly pool?: pg.Pool;
   private readonly lite?: PGlite;
+  private readonly closeHooks: (() => Promise<void>)[] = [];
 
   constructor() {
     const { driver, databaseUrl } = settings();
@@ -90,7 +91,11 @@ export class Database implements Connection, OnModuleDestroy {
     }
   }
   async onModuleDestroy() {
+    await Promise.all(this.closeHooks.map((hook) => hook()));
     await this.lite?.close();
     await this.pool?.end();
+  }
+  beforeClose(hook: () => Promise<void>) {
+    this.closeHooks.push(hook);
   }
 }

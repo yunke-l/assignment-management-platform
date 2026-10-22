@@ -46,7 +46,7 @@ Submission takes a shared lock on the active recipient record. Removal updates t
 
 ## Drafts and submissions
 
-Draft editing locks the assignment and requires the current integer version. A stale editor receives 409, preventing silent overwrites. Replacing all questions and updating draft metadata occur atomically. A draft keeps its original class. Publishing locks the same assignment; published content cannot be edited/deleted. Deleting a draft removes questions and the assignment in one transaction. The original migration is unchanged; later migrations add sessions, invitations, versions and recipient snapshots.
+Draft editing locks the assignment and requires the current integer version. A stale editor receives 409, preventing silent overwrites. Replacing questions and updating draft metadata occur atomically; structured edits retain question and scoring-unit IDs. Publication also checks the expected draft version. A draft keeps its original class. Publishing locks the same assignment; published content cannot be edited/deleted. Deleting a draft removes questions and the assignment in one transaction. The original migration is unchanged; later migrations add sessions, invitations, versions and recipient snapshots.
 
 ```mermaid
 sequenceDiagram
@@ -71,7 +71,7 @@ The database clock controls acceptance. Unique `(assignment_id,student_id)` ensu
 
 Lists filter by owned class/active recipient before applying optional class, literal case-insensitive title substring and derived status. PUBLISHED means published and not yet due; CLOSED means published and due. Stable sort is `created_at DESC,id DESC`; member/report sort is `name,id`. Count and rows share a repeatable-read transaction. Detail metadata, questions and the student result also share one snapshot; statistics and report audience decisions are made inside their read transaction. This prevents a concurrent edit/publication/enrollment from mixing two versions in one response. Separate pagination requests are not a persistent snapshot; concurrent inserts/deletes can move offsets.
 
-Published report denominators use the frozen recipient count, including removed students. Average percentage includes only submissions; no submissions means null. Reports left-join submissions to show students who have not submitted. Student projections omit correct options even after submission.
+Published report denominators use the frozen recipient count, including removed students. Final average percentage includes only released final grades; no submissions means null. Reports left-join submissions to show students who have not submitted. Student projections omit correct options even after submission.
 
 Read hooks abort obsolete fetches and key state to the requested resource, so a previous assignment is not displayed during a selection change. Error states expose retry controls. Submission retries preserve a UUID while answers are unchanged; reloading retrieves any already-committed result.
 
@@ -81,7 +81,7 @@ The runner discovers ordered `NNN_name.sql` files, rejects duplicate sequence nu
 
 The monolith serves built assets and the API from one origin in production, behind one HTTPS proxy. PostgreSQL is required in production. PGlite remains an isolated local demo/test option and cannot prove multi-connection behavior. The verification record distinguishes both test environments.
 
-Login throttles are process-local; horizontal scaling requires a shared strategy. Account disabling, automated email/password recovery, file uploads, manual grading, queues and distributed services are outside this release. Database foreign keys/constraints enforce stored data shape; application rules such as role assignment, immutable published content and authorization remain enforced through the API rather than permitting arbitrary database writes.
+Login throttles are process-local; horizontal scaling requires a shared strategy. Account disabling, automated email/password recovery and distributed services remain outside this release. Structured questions, private file uploads and manual grading run within this monolith. Database foreign keys/constraints enforce stored data shape; application rules such as role assignment, immutable published content and authorization remain enforced through the API rather than permitting arbitrary database writes.
 
 ## Canonical identifiers and regression evidence
 
@@ -90,3 +90,15 @@ All HTTP UUID parameters and shared UUID input fields are validated and normaliz
 Four regression cases first failed on the prior implementation: uppercase draft class IDs returned 400; a preview combined old metadata with newly committed questions; statistics and reports could select a roster after publication using the previous draft status. The fixes use canonical identifiers and repeatable-read transactions. Tests force the concurrent write between metadata and later reads and assert that the write actually happened; they do not merely check an isolation-level string.
 
 References: [PostgreSQL UUID input/output](https://www.postgresql.org/docs/17/datatype-uuid.html) and [transaction isolation](https://www.postgresql.org/docs/17/transaction-iso.html).
+
+## Structured content, scoring and media
+
+Migration 004 backfills historic single choices into normalized definitions without altering IDs, raw submission hashes or historical scores. A compatibility trigger preserves legacy inserts and maps legacy indices onto the actual option IDs. Question-specific contracts isolate public configs from private keys; shared validation and grading are pure functions. Submission grading uses frozen definitions and READY resource metadata, without downloading or transcoding media on the scoring path. Containers organize leaves and contribute no score. Ordering initial sequences are persisted separately from private acceptable answers.
+
+Mixed submissions persist objective results immediately, keep manual/final totals pending, and publish a complete rubric draft in one transaction. Optimistic grading versions protect multiple editors; idempotent publication records immutable revisions. Student projections omit private grading drafts, revision data, per-unit correctness, keys, transcripts and exemplars.
+
+Assets are stored under a private filesystem root. Database rows track owner, assignment/question/node context, declaration hash, original and derived keys, status, decoder attempts and leases. References distinguish draft, published and submitted bindings and mark private exemplar references. The upload stream is bounded before writing; originals are retained only in private storage. Decoding is isolated in bounded image/FFmpeg jobs. A persisted lease/token worker selects pending rows with `FOR UPDATE SKIP LOCKED`, retries transient failures at most three times, and refuses to revive removed resources. Decoder URLs cannot fetch external media.
+
+Upload reservations and rate/concurrency quotas coordinate through account/database locks. Binding and deletion synchronize on asset row locks. Cleanup preserves all references, retains detached resources for seven days, expires unbound teaching files after 24 hours and unsubmitted answer files seven days after the deadline. Shutdown waits for active worker operations before closing database connections. Interrupted operations resume after lease expiry.
+
+The frontend renders only approved AST nodes. Drafts and retry IDs live in tab-scoped, account-isolated session storage with an in-memory fallback; binary files do not. Media uploads have independent progress, cancel and retry controls and preserve concurrent edits. Audio loads on user interaction and pauses other players. Desktop reading groups show shared materials beside questions; responsive groups retain mounted materials so folding them preserves player state. One final submission requires explicit confirmation and every bound attachment to be READY.

@@ -1,3 +1,4 @@
+import { selectChoice } from './controls.js';
 import { test, expect, type Page } from '@playwright/test';
 const password = 'LocalStudy2026!';
 test.beforeEach(async ({ page }) => {
@@ -54,9 +55,9 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
     await navigate(page, 'Assignments');
     await page.getByRole('button', { name: '+ New assignment', exact: true }).click();
     await page.getByLabel('Title', { exact: true }).fill(title);
-    await page
-      .getByRole('combobox', { name: 'Class', exact: true })
-      .selectOption({ label: className });
+    await selectChoice(page.getByRole('combobox', { name: 'Class', exact: true }), {
+      label: className,
+    });
     await page.getByLabel('Deadline date', { exact: true }).fill('2035-10-01');
     await page.getByLabel('Deadline time', { exact: true }).fill('12:00');
     await page.getByLabel('Question text', { exact: true }).fill('What is 2 + 2?');
@@ -67,11 +68,17 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
       ['D', '6'],
     ])
       await page.getByLabel(`Option ${letter}`, { exact: true }).fill(value!);
+    await expect(page.getByRole('radio', { checked: true })).toHaveCount(0);
+    await page
+      .getByRole('radio', { name: 'Mark option A as correct for question 1', exact: true })
+      .check();
+    await page.getByLabel('Points', { exact: true }).fill('10');
     await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
     await page.getByRole('button', { name: 'Edit draft', exact: true }).click();
     await page.getByLabel('Title', { exact: true }).fill(`${title} revised`);
     await page.getByRole('button', { name: 'Save changes', exact: true }).click();
     await page.getByRole('button', { name: 'Publish to class →', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm publish', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: 'Student progress', exact: true }),
     ).toBeVisible();
@@ -92,16 +99,21 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
       { times: 1 },
     );
     await student.getByRole('button', { name: 'Submit answers →', exact: true }).click();
+    await student
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Submit answers', exact: true })
+      .click();
     await expect(student.getByRole('alert')).toBeVisible();
     await student.getByRole('button', { name: 'Submit answers →', exact: true }).click();
-    await expect(student.getByText('Submitted · 10 / 10 points', { exact: true })).toBeVisible();
-    await student.reload();
     await student
-      .getByRole('button')
-      .filter({ has: student.getByRole('heading', { name: `${title} revised`, exact: true }) })
+      .getByRole('dialog')
+      .getByRole('button', { name: 'Submit answers', exact: true })
       .click();
     await expect(student.getByText('Submitted · 10 / 10 points', { exact: true })).toBeVisible();
+    await student.reload();
+    await expect(student.getByText('Submitted · 10 / 10 points', { exact: true })).toBeVisible();
     await page.reload();
+    await navigate(page, 'Assignments');
     await page.getByLabel('Search title').fill(`${title} revised`);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await page
@@ -135,6 +147,8 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
     await page.getByRole('button', { name: 'Confirm removal', exact: true }).click();
     await expect(page.getByText('No students have joined yet.', { exact: true })).toBeVisible();
     await student.reload();
+    await expect(student.getByRole('alert')).toBeVisible();
+    await student.getByRole('button', { name: '↑ Back to assignments', exact: true }).click();
     await expect(student.getByRole('heading', { name: 'You’re all caught up.' })).toBeVisible();
     await navigate(page, 'Assignments');
     await page
@@ -179,12 +193,12 @@ test('keyboard sign-in, empty filter, error recovery and session expiry', async 
       }),
     { times: 1 },
   );
-  await page.getByLabel('Filter by status').selectOption('DRAFT');
+  await selectChoice(page.getByLabel('Filter by status'), 'DRAFT');
   await expect(page.getByRole('alert')).toContainText('Temporary outage');
   await page.getByRole('button', { name: 'Retry loading assignments' }).click();
   await expect(page.getByRole('heading', { name: 'No matching assignments.' })).toBeVisible();
   await page.context().clearCookies();
-  await page.getByLabel('Filter by status').selectOption('PUBLISHED');
+  await selectChoice(page.getByLabel('Filter by status'), 'PUBLISHED');
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('expired');
 });
@@ -210,7 +224,8 @@ test('question option limits, correct-answer reindexing and draft deletion work 
   await page.getByRole('button', { name: 'Remove option B from question 1', exact: true }).click();
   await expect(correct('C')).toBeChecked();
   await page.getByRole('button', { name: 'Remove option C from question 1', exact: true }).click();
-  await expect(correct('A')).toBeChecked();
+  await expect(page.getByRole('radio', { checked: true })).toHaveCount(0);
+  await correct('A').check();
   await expect(page.getByRole('button', { name: /Remove option/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
   await expect(page.getByRole('radio')).toHaveCount(2);

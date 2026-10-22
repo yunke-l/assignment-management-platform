@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { before, after, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import supertest from 'supertest';
 import { createApp } from '../src/app.js';
 import { Database } from '../src/database/database.js';
@@ -54,8 +55,17 @@ const create = async (classId = ids.classroom) =>
       .send(input(classId))
       .expect(201)
   ).body as AssignmentDetail;
-const publish = (id: string) =>
-  http.post(`/api/assignments/${id}/publish`).set('Authorization', bearer()).expect(201);
+const publish = async (id: string) => {
+  const detail = await http
+    .get(`/api/assignments/${id}`)
+    .set('Authorization', bearer())
+    .expect(200);
+  return http
+    .post(`/api/assignments/${id}/publish`)
+    .set('Authorization', bearer())
+    .send({ version: detail.body.version })
+    .expect(201);
+};
 const submitInput = (a: AssignmentDetail) => ({
   requestId: randomUUID(),
   answers: a.questions.map((q) => ({ questionId: q.id, selectedIndex: 0 })),
@@ -87,7 +97,14 @@ after(async () => {
 test('migrations are repeatable and detect edited applied history', async () => {
   await migrate(db);
   const rows = await db.query('SELECT name,checksum FROM schema_migrations ORDER BY name');
-  assert.equal(rows.length, 3);
+  const names = (await readdir(new URL('../migrations/', import.meta.url)))
+    .filter((name) => /^\d{3}_[a-z0-9_]+\.sql$/.test(name))
+    .sort()
+    .map((name) => name.slice(0, -4));
+  assert.deepEqual(
+    rows.map((row) => row.name),
+    names,
+  );
   await db.query("UPDATE schema_migrations SET checksum='tampered' WHERE name='002_accounts'");
   try {
     await assert.rejects(migrate(db), /modified/);
@@ -348,6 +365,21 @@ test('draft edits use a version and published content cannot be edited or delete
     .set('Authorization', bearer())
     .send(next)
     .expect(409);
+  await http
+    .post(`/api/assignments/${a.id}/publish`)
+    .set('Authorization', bearer())
+    .send({})
+    .expect(400);
+  await http
+    .post(`/api/assignments/${a.id}/publish`)
+    .set('Authorization', bearer())
+    .send({ version: a.version })
+    .expect(409);
+  assert.equal(
+    (await http.get(`/api/assignments/${a.id}`).set('Authorization', bearer()).expect(200)).body
+      .status,
+    'DRAFT',
+  );
   await publish(a.id);
   await http
     .patch(`/api/assignments/${a.id}`)

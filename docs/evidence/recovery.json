@@ -1,56 +1,105 @@
 {
-  "verifiedAt": "2026-10-07T20:51:15.284Z",
+  "verifiedAt": "2026-10-09T05:26:12.968Z",
   "node": "v24.5.0",
   "pglite": "0.5.8",
   "method": "Offline directory copy after clean shutdown; restore to a separate, previously absent directory with the same PGlite version.",
   "scope": "Synthetic local PGlite fixture only. Does not establish PostgreSQL pg_dump recovery, cross-version compatibility or production disaster recovery.",
-  "fixtureDirectory": ".local/recovery-drill-ZHLDKt",
-  "backupMs": 2966,
-  "restoreAndVerifyMs": 2512,
+  "fixtureDirectory": ".local/recovery-drill-AR4RsZ",
+  "backupMs": 336,
+  "restoreAndVerifyMs": 484,
   "tables": {
     "schema_migrations": {
-      "count": 3,
-      "sha256": "279dbc45321485aed259edf272fbeed75fea6b0ae67e97787b8daf66737b431a"
+      "count": 6,
+      "sha256": "172d2f03305e9f7f461597b27109f9c00ae86edbbfeb12e7597fbd6c2f9de7ba"
     },
     "users": {
       "count": 4,
-      "sha256": "186bd9baec0b3093b5141347fd3f0e3e9be4fa0fbd9ef621a3811fb5ba791059"
+      "sha256": "8eeaedbe6b2628c31c839d419405d70746a2f6accd5433b492575acf99424282"
     },
     "classrooms": {
       "count": 2,
-      "sha256": "6d1ebd2b71806a223e87f2ff577e402532f2c80cc1ccd5249ebdb23a17f68f95"
+      "sha256": "92f727bad14d532f3f8fa21cc9b58bfd7b593adcf968b234e34312601b0cdc1f"
     },
     "class_memberships": {
       "count": 2,
       "sha256": "d183d4ca48a2a4c44b00fdfd313628b5114277fcad2b14a705ce4fcc38f807eb"
     },
     "assignments": {
-      "count": 1,
-      "sha256": "a27b54c3a7b76b65ab396e3ce98ba0bdac3ec2385c5ffa7fbabed614395d43ca"
+      "count": 2,
+      "sha256": "cddd52fcfe1a5fd15513f5733f824a93feaa4834594519f6c888b30546dee064"
     },
     "questions": {
-      "count": 1,
-      "sha256": "799a4ccddaa240d60277fbff46fcfc4bef59110e4c6b743d16044eee6ee3666e"
+      "count": 2,
+      "sha256": "d0aab449aa33744f168a4397f67fbedcca4ffe1f9d238da98b151f12e8dd57dd"
     },
     "assignment_recipients": {
-      "count": 1,
-      "sha256": "ef81efc1c258583da3ae1a6433af003584846cab8de9cd679ee0713afeaf4b32"
+      "count": 2,
+      "sha256": "53a052dad2970e295597979d7155b5162d9e8b3add6fceccdd1765f8ee60d621"
     },
     "submissions": {
-      "count": 1,
-      "sha256": "2e9802e3b3459dbd7325432fd627249be4447427b9d69ecb46905826a751f680"
+      "count": 2,
+      "sha256": "6673075f9c8c48234ffed519b726a571a93502675fb5996fb76b2f0a8c901e44"
     },
     "invitations": {
       "count": 1,
-      "sha256": "741a62cf73fba41d978a3f37222a762efd15ff57999f7cda0301c72276c19adc"
+      "sha256": "4de0d1795d45187981c5c23e9d69262e8e1521daa615bea086fabdf6bda0c3fd"
     },
     "sessions": {
       "count": 2,
-      "sha256": "a02f23222d59c6c9962d715a4e1a46c3bcba549605082d2c6b1a0dda68136f1e"
+      "sha256": "344cc46319a37a978050484baaa0c6303da0911db29ad394aabfd8ced978a60e"
+    },
+    "grading_drafts": {
+      "count": 1,
+      "sha256": "a7f11d9ac34db5b2a2962a30d554c1dbb8d9ea403118b379db35497b88a40a11"
+    },
+    "grading_revisions": {
+      "count": 1,
+      "sha256": "3d5035dde7036c8ef5ab6d15e165ca731ca190238ba3ea40503e9a7cfe7e8c08"
+    },
+    "assets": {
+      "count": 2,
+      "sha256": "32c114e72004b749ba882f8bacf34daf406c3e5e232c0a2f0d44991b39ddd143"
+    },
+    "asset_references": {
+      "count": 2,
+      "sha256": "ad023149116b626a6eb5baeb4658614e1f190bf4e619d54ba9e5b631305d0d11"
+    },
+    "upload_events": {
+      "count": 2,
+      "sha256": "ccf2f20747ea392ee28cd8d28c330fe5285da9565a5bd0207bcec6906f8ba0fe"
     }
   },
+  "mediaManifest": [
+    {
+      "key": "56b1bec4-fa41-476d-b6f0-b68e44b2d301.2e8d8417-f577-4325-b0e7-6aced1af68d7.display",
+      "bytes": 174,
+      "sha256": "2d8dd3097a6c38e7cad28135637c0e4d19f25762842b60c78e48c856d8eca5ad"
+    },
+    {
+      "key": "56b1bec4-fa41-476d-b6f0-b68e44b2d301.2e8d8417-f577-4325-b0e7-6aced1af68d7.thumbnail",
+      "bytes": 174,
+      "sha256": "2d8dd3097a6c38e7cad28135637c0e4d19f25762842b60c78e48c856d8eca5ad"
+    },
+    {
+      "key": "56b1bec4-fa41-476d-b6f0-b68e44b2d301.736a954d-1d55-4321-854d-41174b4ba7a6.original",
+      "bytes": 174,
+      "sha256": "2d8dd3097a6c38e7cad28135637c0e4d19f25762842b60c78e48c856d8eca5ad"
+    },
+    {
+      "key": "ffe2024b-4d10-461e-b771-f011fafdbe76.36393f42-956b-41fe-a5f0-5e6c7e77cf2a.display",
+      "bytes": 1412,
+      "sha256": "06380b3301eb0e0f032e2a931fa6fef34a5e25e6846b226f200e445ff40691b4"
+    },
+    {
+      "key": "ffe2024b-4d10-461e-b771-f011fafdbe76.97dbf54d-8c1e-45f7-8458-f1de23f70471.original",
+      "bytes": 16044,
+      "sha256": "56d4af65701c26df20bd4021eda95b6e830348ce3a746086079fe89285548dc9"
+    }
+  ],
   "assertions": [
-    "All ten table counts and SHA-256 logical data digests match",
+    "All fifteen table counts and SHA-256 logical data digests match",
+    "Original and derived media manifests match SHA-256 after backup and restore",
+    "Restored student media playback, teacher originals and grading revisions remain readable",
     "Applied migrations remain valid",
     "Restored sessions and invitations revoked",
     "Teacher and student can sign in again",

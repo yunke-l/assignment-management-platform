@@ -1,4 +1,6 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react';
+import { Button, Modal } from '@mantine/core';
+import classes from './theme.module.css';
 
 type Prompt = {
   title: string;
@@ -14,23 +16,15 @@ export const useConfirm = () => useContext(ConfirmContext);
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const resolve = useRef<((value: boolean) => void) | null>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
   function finish(value: boolean) {
-    dialog.current?.close();
     resolve.current?.(value);
     resolve.current = null;
     setPrompt(null);
-    previousFocus.current?.focus();
   }
-  useEffect(() => {
-    if (prompt) dialog.current?.showModal();
-  }, [prompt]);
   return (
     <ConfirmContext.Provider
       value={(next) => {
         if (resolve.current) return Promise.resolve(false);
-        previousFocus.current = document.activeElement as HTMLElement;
         return new Promise<boolean>((done) => {
           resolve.current = done;
           setPrompt(next);
@@ -38,37 +32,31 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       }}
     >
       {children}
-      {prompt && (
-        <dialog
-          ref={dialog}
-          className="confirm-dialog"
-          aria-labelledby="confirm-title"
-          aria-describedby="confirm-description"
-          onCancel={(event) => {
-            event.preventDefault();
-            finish(false);
-          }}
-        >
-          <span className="dialog-icon" aria-hidden="true">
-            !
-          </span>
-          <h2 id="confirm-title">{prompt.title}</h2>
-          <p id="confirm-description" className="muted">
-            {prompt.description}
-          </p>
-          <div className="dialog-actions">
-            <button className="secondary" autoFocus onClick={() => finish(false)}>
-              {prompt.cancelLabel ?? 'Keep working'}
-            </button>
-            <button
-              className={`primary ${prompt.danger ? 'danger' : ''}`}
-              onClick={() => finish(true)}
-            >
-              {prompt.confirmLabel ?? 'Discard changes'}
-            </button>
-          </div>
-        </dialog>
-      )}
+      <Modal
+        opened={prompt !== null}
+        onClose={() => finish(false)}
+        title={prompt?.title}
+        centered
+        size={440}
+        withCloseButton={false}
+        closeOnClickOutside={false}
+        overlayProps={{ backgroundOpacity: 0.4, blur: 3 }}
+        transitionProps={{ duration: 0 }}
+      >
+        {prompt && (
+          <>
+            <p className={classes.description}>{prompt.description}</p>
+            <div className="dialog-actions">
+              <Button variant="default" data-autofocus onClick={() => finish(false)}>
+                {prompt.cancelLabel ?? 'Keep working'}
+              </Button>
+              <Button color={prompt.danger ? '#a74439' : undefined} onClick={() => finish(true)}>
+                {prompt.confirmLabel ?? 'Discard changes'}
+              </Button>
+            </div>
+          </>
+        )}
+      </Modal>
     </ConfirmContext.Provider>
   );
 }

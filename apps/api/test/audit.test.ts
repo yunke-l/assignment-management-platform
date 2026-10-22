@@ -8,6 +8,7 @@ import { Database } from '../src/database/database.js';
 import { migrate } from '../src/database/migrate.js';
 import { ids, seed } from '../src/database/seed.js';
 import { settings } from '../src/config.js';
+import { mediaLimits } from '@amp/contracts';
 
 process.env.NODE_ENV = 'test';
 process.env.ALLOW_DEMO_SEED = 'true';
@@ -56,7 +57,7 @@ test('oversized JSON returns 413 rather than an internal-server error', async ()
   const response = await http
     .post('/api/auth/login')
     .type('json')
-    .send(JSON.stringify({ value: 'x'.repeat(600000) }))
+    .send(JSON.stringify({ value: 'x'.repeat(mediaLimits.jsonBytes + 1) }))
     .expect(413);
   assert.equal(response.body.requestId, response.headers['x-request-id']);
 });

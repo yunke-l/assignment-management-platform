@@ -28,6 +28,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
       - run: npm run check
       - run: node scripts/recovery-drill.mjs
       - run: npm run format:check
@@ -62,6 +63,13 @@ jobs:
         run: |
           docker compose -f compose.production.yaml exec -T app node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
+          import { execFileSync } from 'node:child_process';
+          import sharp from 'sharp';
+          import { access } from 'node:fs/promises';
+          execFileSync('ffmpeg', ['-version']);
+          execFileSync('ffprobe', ['-version']);
+          assert.ok(sharp.versions.vips);
+          await access(process.env.ASSET_DIRECTORY);
           const origin = 'http://127.0.0.1:3100';
           const page = await fetch(origin);
           assert.equal(page.status, 200);

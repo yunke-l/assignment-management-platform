@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import supertest from 'supertest';
+import sharp from 'sharp';
+import { questionV2Schema } from '@amp/contracts';
+import { AssetsService } from '../apps/api/dist/assets/assets.service.js';
 import { createApp } from '../apps/api/dist/app.js';
 import { Database } from '../apps/api/dist/database/database.js';
 import { migrate } from '../apps/api/dist/database/migrate.js';
@@ -25,6 +28,7 @@ process.env.DEMO_PASSWORD = 'RecoveryFixture123!';
 
 async function open(dataDirectory) {
   process.env.DATABASE_URL = dataDirectory;
+  process.env.ASSET_DIRECTORY = `${dataDirectory}-assets`;
   return createApp(true);
 }
 async function login(http, role) {
@@ -49,6 +53,11 @@ const tables = [
   'submissions',
   'invitations',
   'sessions',
+  'grading_drafts',
+  'grading_revisions',
+  'assets',
+  'asset_references',
+  'upload_events',
 ];
 async function snapshot(db) {
   const result = {};
@@ -63,6 +72,38 @@ async function snapshot(db) {
     };
   }
   return result;
+}
+async function fileManifest(directory) {
+  const paths = (await readdir(directory, { recursive: true, withFileTypes: true }))
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(entry.parentPath, entry.name))
+    .sort();
+  return Promise.all(
+    paths.map(async (file) => {
+      const bytes = await readFile(file);
+      return {
+        key: path.relative(directory, file),
+        bytes: bytes.length,
+        sha256: createHash('sha256').update(bytes).digest('hex'),
+      };
+    }),
+  );
+}
+function recording() {
+  const b = Buffer.alloc(16044);
+  b.write('RIFF');
+  b.writeUInt32LE(b.length - 8, 4);
+  b.write('WAVEfmt ', 8);
+  b.writeUInt32LE(16, 16);
+  b.writeUInt16LE(1, 20);
+  b.writeUInt16LE(1, 22);
+  b.writeUInt32LE(8000, 24);
+  b.writeUInt32LE(16000, 28);
+  b.writeUInt16LE(2, 32);
+  b.writeUInt16LE(16, 34);
+  b.write('data', 36);
+  b.writeUInt32LE(16000, 40);
+  return b;
 }
 let app;
 try {
@@ -96,6 +137,7 @@ try {
   await http
     .post(`/api/assignments/${assignment.id}/publish`)
     .set('Authorization', `Bearer ${teacher}`)
+    .send({ version: assignment.version })
     .expect(201);
   const submission = (
     await http
@@ -114,14 +156,199 @@ try {
       .send({})
       .expect(201)
   ).body;
+  const dimensionId = randomUUID(),
+    questionId = randomUUID();
+  const question = questionV2Schema.parse({
+    id: questionId,
+    parentId: null,
+    position: 0,
+    type: 'RESPONSE',
+    prompt: [
+      {
+        id: randomUUID(),
+        type: 'paragraph',
+        children: [{ type: 'text', text: 'Describe the picture and read your response aloud.' }],
+      },
+    ],
+    answerAreaContent: [],
+    points: 2,
+    config: {
+      textEnabled: true,
+      textRequired: true,
+      minImages: 0,
+      maxImages: 0,
+      minAudios: 1,
+      maxAudios: 1,
+      rubric: [
+        {
+          id: dimensionId,
+          name: 'Meaning and pronunciation',
+          description: 'Clear meaning and understandable pronunciation.',
+          points: 2,
+        },
+      ],
+    },
+    answerKey: { referenceText: 'Private exemplar' },
+  });
+  const mixed = (
+    await http
+      .post('/api/assignments')
+      .set('Authorization', `Bearer ${teacher}`)
+      .send({
+        schemaVersion: 2,
+        classId: ids.classroom,
+        title: 'Media recovery fixture',
+        description: '',
+        dueAt: new Date(Date.now() + 86400000).toISOString(),
+        questions: [question],
+      })
+      .expect(201)
+  ).body;
+  const processor = app.get(AssetsService);
+  async function media(roleToken, purpose, kind, name, mime, data, nodeId = null) {
+    const file = (
+      await http
+        .post('/api/assets/uploads')
+        .set('Authorization', `Bearer ${roleToken}`)
+        .send({
+          uploadRequestId: randomUUID(),
+          assignmentId: mixed.id,
+          questionId,
+          contentNodeId: nodeId,
+          purpose,
+          kind,
+          name,
+          mime,
+          bytes: data.length,
+        })
+        .expect(201)
+    ).body;
+    await http
+      .post(`/api/assets/uploads/${file.id}/content`)
+      .set('Authorization', `Bearer ${roleToken}`)
+      .attach('file', data, { filename: name, contentType: mime })
+      .expect(201);
+    for (let n = 0; n < 10; n++) {
+      const meta = (
+        await http
+          .get(`/api/assets/${file.id}`)
+          .set('Authorization', `Bearer ${roleToken}`)
+          .expect(200)
+      ).body;
+      if (meta.status === 'READY') return meta;
+      assert.equal(meta.status, 'PROCESSING');
+      await processor.processNext();
+    }
+    throw new Error('Recovery fixture media did not become READY.');
+  }
+  const picture = await sharp({
+    create: { width: 64, height: 32, channels: 3, background: '#225588' },
+  })
+    .png()
+    .toBuffer();
+  const nodeId = randomUUID();
+  const teaching = await media(
+    teacher,
+    'TEACHING',
+    'image',
+    'recovery.png',
+    'image/png',
+    picture,
+    nodeId,
+  );
+  question.prompt.push({
+    id: nodeId,
+    type: 'image',
+    assetId: teaching.id,
+    label: 'Observe the picture',
+    alt: 'A simple blue rectangle',
+    caption: '',
+  });
+  const edited = (
+    await http
+      .patch(`/api/assignments/${mixed.id}`)
+      .set('Authorization', `Bearer ${teacher}`)
+      .send({
+        schemaVersion: 2,
+        classId: ids.classroom,
+        title: mixed.title,
+        description: '',
+        dueAt: mixed.dueAt,
+        version: mixed.version,
+        questions: [question],
+      })
+      .expect(200)
+  ).body;
+  const published = (
+    await http
+      .post(`/api/assignments/${mixed.id}/publish`)
+      .set('Authorization', `Bearer ${teacher}`)
+      .send({ schemaVersion: 2, version: edited.version })
+      .expect(201)
+  ).body;
+  const rawAudio = recording();
+  const answerAudio = await media(student, 'ANSWER', 'audio', 'reading.wav', 'audio/wav', rawAudio);
+  await http
+    .patch(`/api/assets/${answerAudio.id}`)
+    .set('Authorization', `Bearer ${student}`)
+    .send({ caption: 'My reading' })
+    .expect(200);
+  const manualSubmission = (
+    await http
+      .post(`/api/assignments/${mixed.id}/submissions`)
+      .set('Authorization', `Bearer ${student}`)
+      .send({
+        schemaVersion: 2,
+        publishedVersion: published.publishedVersion,
+        requestId: randomUUID(),
+        answers: [
+          {
+            questionId,
+            type: 'RESPONSE',
+            payload: { text: 'My spoken response', assetIds: [answerAudio.id] },
+            evidenceAssetIds: [],
+          },
+        ],
+      })
+      .expect(201)
+  ).body;
+  const savedGrade = (
+    await http
+      .patch(`/api/submissions/${manualSubmission.id}/grading`)
+      .set('Authorization', `Bearer ${teacher}`)
+      .send({
+        gradingVersion: manualSubmission.gradingVersion,
+        answers: [{ questionId, dimensions: [{ dimensionId, score: 2 }], feedback: 'Well done.' }],
+      })
+      .expect(200)
+  ).body;
+  await http
+    .post(`/api/submissions/${manualSubmission.id}/grading/publish`)
+    .set('Authorization', `Bearer ${teacher}`)
+    .send({ gradingVersion: savedGrade.gradingVersion, requestId: randomUUID(), reason: '' })
+    .expect(201);
   const before = await snapshot(db);
+  const beforeFiles = await fileManifest(`${source}-assets`);
+  assert.ok(beforeFiles.length >= 5, 'Originals and safe derived files must exist.');
   await app.close();
   app = undefined;
   const backupStarted = performance.now();
   await cp(source, backup, { recursive: true, errorOnExist: true, force: false });
+  await cp(`${source}-assets`, `${backup}-assets`, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+  });
+  assert.deepEqual(await fileManifest(`${backup}-assets`), beforeFiles);
   const backupMs = performance.now() - backupStarted;
   const restoreStarted = performance.now();
   await cp(backup, restored, { recursive: true, errorOnExist: true, force: false });
+  await cp(`${backup}-assets`, `${restored}-assets`, {
+    recursive: true,
+    errorOnExist: true,
+    force: false,
+  });
+  assert.deepEqual(await fileManifest(`${restored}-assets`), beforeFiles);
   app = await open(restored);
   db = app.get(Database);
   await migrate(db);
@@ -164,6 +391,37 @@ try {
     .set('Authorization', `Bearer ${newStudent}`)
     .send({ invitation: invitation.token })
     .expect(400);
+  const restoredManual = (
+    await http
+      .get(`/api/assignments/${mixed.id}?schemaVersion=2`)
+      .set('Authorization', `Bearer ${newStudent}`)
+      .expect(200)
+  ).body;
+  assert.equal(restoredManual.submission.score, 2);
+  assert.equal(restoredManual.submission.gradingStatus, 'GRADED');
+  assert.ok(!JSON.stringify(restoredManual).includes('Private exemplar'));
+  await http
+    .get(`/api/assets/${teaching.id}/content`)
+    .set('Authorization', `Bearer ${newStudent}`)
+    .expect(200);
+  const original = await http
+    .get(`/api/assets/${answerAudio.id}/content?variant=original`)
+    .set('Authorization', `Bearer ${newTeacher}`)
+    .expect(200);
+  assert.deepEqual(original.body, rawAudio);
+  await http
+    .get(`/api/assets/${answerAudio.id}/content`)
+    .set('Authorization', `Bearer ${newStudent}`)
+    .set('Range', 'bytes=0-15')
+    .expect(206);
+  const restoredReview = (
+    await http
+      .get(`/api/assignments/${mixed.id}/submissions/${manualSubmission.id}`)
+      .set('Authorization', `Bearer ${newTeacher}`)
+      .expect(200)
+  ).body;
+  assert.equal(restoredReview.gradingRevisions.length, 1);
+  assert.equal(restoredReview.gradingRevisions[0].score, 2);
   const pglite = JSON.parse(
     await readFile(path.join(root, 'node_modules/@electric-sql/pglite/package.json'), 'utf8'),
   ).version;
@@ -179,8 +437,11 @@ try {
     backupMs: Math.round(backupMs),
     restoreAndVerifyMs: Math.round(restoreMs),
     tables: before,
+    mediaManifest: beforeFiles,
     assertions: [
-      'All ten table counts and SHA-256 logical data digests match',
+      'All fifteen table counts and SHA-256 logical data digests match',
+      'Original and derived media manifests match SHA-256 after backup and restore',
+      'Restored student media playback, teacher originals and grading revisions remain readable',
       'Applied migrations remain valid',
       'Restored sessions and invitations revoked',
       'Teacher and student can sign in again',

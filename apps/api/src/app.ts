@@ -7,6 +7,7 @@ import { json, static as serveStatic } from 'express';
 import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
+import { mediaLimits } from '@amp/contracts';
 import { AppModule } from './app.module.js';
 import { cookieName } from './auth/session.js';
 
@@ -47,9 +48,16 @@ class ApiErrorFilter implements ExceptionFilter {
                 ? 'Invalid request body.'
                 : 'An unexpected error occurred.';
     if (status === 500) Logger.error(error instanceof Error ? error.stack : error, 'API');
-    res
-      .status(status)
-      .json({ statusCode: status, message, requestId: res.getHeader('x-request-id') });
+    const detail = error instanceof HttpException ? error.getResponse() : null;
+    const fields =
+      detail && typeof detail === 'object' ? (detail as { code?: string; errors?: unknown[] }) : {};
+    res.status(status).json({
+      statusCode: status,
+      message,
+      ...(fields.code ? { code: fields.code } : {}),
+      ...(fields.errors ? { errors: fields.errors } : {}),
+      requestId: res.getHeader('x-request-id'),
+    });
   }
 }
 export async function createApp(quiet = false) {
@@ -96,12 +104,27 @@ export async function createApp(quiet = false) {
     }
     next();
   });
-  // The contract permits 20 questions with Unicode text: more than Express's
-  // default 100 KiB, while still bounding parsing before controller validation.
-  app.use(json({ limit: 512 * 1024 }));
+  // Structured mixed assignments have a separate bounded JSON budget.
+  // Media bytes use the upload stream, never this parser.
+  app.use(json({ limit: mediaLimits.jsonBytes }));
   app.useGlobalFilters(new ApiErrorFilter());
-  if (process.env.SERVE_WEB === 'true')
-    app.use(serveStatic(fileURLToPath(new URL('../../web/dist/', import.meta.url))));
+  if (process.env.SERVE_WEB === 'true') {
+    const webRoot = fileURLToPath(new URL('../../web/dist/', import.meta.url));
+    app.use(serveStatic(webRoot));
+    // Client routes must also work on a direct visit or browser refresh.
+    // Keep API endpoints and missing static files on their normal 404 paths.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (
+        ['GET', 'HEAD'].includes(req.method) &&
+        /^\/(assignments(?:\/[^/.]+(?:\/edit)?)?|classes|account)\/?$/.test(req.path) &&
+        req.accepts('html')
+      ) {
+        res.sendFile('index.html', { root: webRoot });
+        return;
+      }
+      next();
+    });
+  }
   app.enableShutdownHooks();
   await app.init();
   return app;

@@ -1,27 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import type {
-  Assignment,
-  AssignmentDetail,
-  AssignmentStats,
-  Classroom,
-  PageResult,
-  Submission,
-  SubmissionRow,
-} from '@amp/contracts';
+import { Button, InputField, SelectField } from './Controls';
+import { useEffect, useState } from 'react';
+import { useLocation, useMatch } from 'react-router-dom';
+import { listUrl, readListFilters, useWorkspaceNavigation } from './navigation';
+import type { Assignment, AssignmentDetailV2, Classroom, PageResult } from '@amp/contracts';
 import { request, useResource } from './api';
+import { AssignmentView, type StatsV2 } from './AssignmentView';
 import { AssignmentForm } from './AssignmentForm';
 
 import { Login, AccountPanel, type Session } from './Auth';
 import { ClassManager } from './ClassManager';
 import { Brand, Owl, WorkspaceIcon } from './Owl';
-import {
-  WorkProvider,
-  hasPageWork,
-  useBeforeUnload,
-  useWork,
-  useWorkDraft,
-  useWorkGuard,
-} from './WorkProtection';
+import { WorkProvider, hasPageWork, useBeforeUnload, useWork } from './WorkProtection';
 import { useConfirm } from './ConfirmDialog';
 const dateLabel = (value: string) =>
   new Date(value).toLocaleString('en-US', {
@@ -76,9 +65,9 @@ export function App() {
         <p role="alert" className="error">
           {error}
         </p>
-        <button className="primary" onClick={() => setAttempt((v) => v + 1)}>
+        <Button className="primary" onClick={() => setAttempt((v) => v + 1)}>
           Retry connection
-        </button>
+        </Button>
       </main>
     );
   return session ? (
@@ -107,28 +96,32 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
   const { token, user } = session;
   const work = useWork();
   const confirm = useConfirm();
-  const [resuming, setResuming] = useState<string | null>(null);
+  const [resumingReview, setResumingReview] = useState<{
+    assignmentId: string;
+    submissionId: string;
+    request: number;
+  } | null>(null);
   const teacher = user.role === 'TEACHER';
-  const [page, setPage] = useState(1);
+  const location = useLocation();
+  const editMatch = useMatch('/assignments/:id/edit');
+  const detailMatch = useMatch('/assignments/:id');
+  const isNew = location.pathname === '/assignments/new';
+  const isList = location.pathname === '/assignments' || location.pathname === '/';
+  const selected = isNew ? null : (editMatch?.params.id ?? detailMatch?.params.id ?? null);
+  const composing = isNew || !!editMatch;
+  const section =
+    location.pathname === '/classes'
+      ? 'classes'
+      : location.pathname === '/account'
+        ? 'account'
+        : 'assignments';
+  const knownRoute = isList || isNew || !!editMatch || !!detailMatch || section !== 'assignments';
+  const filters = readListFilters(location.search);
+  const { page, search, classId: classFilter, status: statusFilter } = filters;
   const [revision, setRevision] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [composing, setComposing] = useState(false);
-  const [editing, setEditing] = useState<AssignmentDetail | undefined>();
-  const [section, setSection] = useState<'assignments' | 'classes' | 'account'>('assignments');
-  const [classFilter, setClassFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [search, setSearch] = useState('');
-  const [searchInput, setSearchInput] = useState('');
+  const [searchInput, setSearchInput] = useState(search);
   const [logoutError, setLogoutError] = useState('');
   const [loggingOut, setLoggingOut] = useState(false);
-  const [detailRequest, setDetailRequest] = useState(0);
-  const listPanel = useRef<HTMLElement>(null);
-  const detailPanel = useRef<HTMLElement>(null);
-  useEffect(() => {
-    if ((selected || composing) && window.matchMedia('(max-width: 1080px)').matches) {
-      detailPanel.current?.scrollIntoView({ block: 'start' });
-    }
-  }, [selected, composing, detailRequest]);
   const params = new URLSearchParams({ page: String(page), pageSize: '8' });
   if (classFilter) params.set('classId', classFilter);
   if (statusFilter) params.set('status', statusFilter);
@@ -149,52 +142,60 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
   }
 
   const list = useResource<PageResult<Assignment>>(
-    section === 'assignments' ? `/assignments?${params}` : null,
+    isList ? `/assignments?${params}` : null,
     token,
     revision,
   );
   const classes = useResource<Classroom[]>('/classes', token, revision);
-  const detail = useResource<AssignmentDetail>(
-    section === 'assignments' && selected ? `/assignments/${selected}` : null,
+  const detail = useResource<AssignmentDetailV2>(
+    section === 'assignments' && selected ? `/assignments/${selected}?schemaVersion=2` : null,
     token,
     revision,
   );
-  const stats = useResource<AssignmentStats>(
-    section === 'assignments' && teacher && selected ? `/assignments/${selected}/stats` : null,
+  const stats = useResource<StatsV2>(
+    section === 'assignments' && teacher && selected
+      ? `/assignments/${selected}/stats?schemaVersion=2`
+      : null,
     token,
     revision,
   );
+  const { go, listPath, rememberList, rememberedSearch } = useWorkspaceNavigation(
+    user.id,
+    !!list.data || !!list.error,
+  );
+  const editing = editMatch ? (detail.data ?? undefined) : undefined;
   useEffect(() => {
-    if (resuming && detail.data?.id === resuming) {
-      if (detail.data.status === 'DRAFT') {
-        setEditing(detail.data);
-        setComposing(true);
-      }
-      setResuming(null);
-    }
-  }, [detail.data, resuming]);
+    if (isList) setSearchInput(rememberedSearch ?? search);
+  }, [isList, location.key, search, rememberedSearch]);
+  function changeFilters(change: Partial<typeof filters>) {
+    go(listUrl({ ...filters, ...change }));
+  }
+  function backToList() {
+    go(listPath);
+  }
   const unfinished = Object.entries(work.entries).filter(([key]) =>
-    /^(assignment:|answers:)/.test(key),
+    /^(assignment:|answers:|grading:)/.test(key),
   );
   return (
-    <div className="workspace">
+    <div className={`workspace${composing ? ' workspace-editing' : ''}`}>
       <aside className="sidebar">
         <Brand />
         <span className="eyebrow">WORKSPACE</span>
         <nav aria-label="Workspace navigation">
           {(['assignments', 'classes', 'account'] as const).map((item) => (
-            <button
+            <Button
               key={item}
               className={section === item ? 'nav-current' : 'nav-link'}
               aria-current={section === item ? 'page' : undefined}
               disabled={work.busy}
               onClick={() => {
-                if (section !== item) void work.navigate(() => setSection(item));
+                const target = item === 'assignments' ? listPath : `/${item}`;
+                if (location.pathname + location.search !== target) go(target);
               }}
             >
               <WorkspaceIcon name={item} />
               {item === 'assignments' ? 'Assignments' : item === 'classes' ? 'Classes' : 'Account'}
-            </button>
+            </Button>
           ))}
         </nav>
         <div className="sidebar-note">
@@ -213,26 +214,43 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
             <small>{teacher ? 'Teacher' : 'Student'}</small>
           </div>
         </div>
-        <button
+        <Button
           className="text-button signout"
           disabled={loggingOut || work.busy}
           onClick={() => void logout()}
         >
           Sign out
-        </button>
+        </Button>
       </aside>
       <main className="main-content">
         <header className="topbar">
-          <span>
-            Workspace /{' '}
-            <b>
-              {section === 'assignments'
-                ? 'Assignments'
-                : section === 'classes'
-                  ? 'Classes'
-                  : 'Account'}
-            </b>
-          </span>
+          <nav className="breadcrumbs" aria-label="Breadcrumb">
+            <span>Workspace</span>
+            <span aria-hidden="true">/</span>
+            {section === 'assignments' && !isList ? (
+              <>
+                <Button className="text-button" onClick={backToList}>
+                  Assignments
+                </Button>
+                <span aria-hidden="true">/</span>
+                <b aria-current="page">
+                  {isNew
+                    ? 'New assignment'
+                    : composing
+                      ? 'Edit assignment'
+                      : (detail.data?.title ?? 'Assignment details')}
+                </b>
+              </>
+            ) : (
+              <b aria-current="page">
+                {section === 'assignments'
+                  ? 'Assignments'
+                  : section === 'classes'
+                    ? 'Classes'
+                    : 'Account'}
+              </b>
+            )}
+          </nav>
           <span className="role-tag">{teacher ? 'TEACHER SPACE' : 'STUDENT SPACE'}</span>
         </header>
         {logoutError && (
@@ -257,30 +275,31 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
             <div>
               {unfinished.map(([key, entry]) => (
                 <div className="recovery-item" key={key}>
-                  <button
+                  <Button
                     key={key}
                     className="secondary"
                     disabled={work.busy}
-                    onClick={() =>
-                      void work.navigate(() => {
-                        setSection('assignments');
-                        setDetailRequest((v) => v + 1);
-                        if (key === 'assignment:new') {
-                          setEditing(undefined);
-                          setSelected(null);
-                          setComposing(true);
-                        } else {
-                          const id = key.split(':')[1]!;
-                          setSelected(id);
-                          setComposing(false);
-                          setResuming(key.startsWith('assignment:') ? id : null);
-                        }
-                      })
-                    }
+                    onClick={() => {
+                      const id = key.split(':')[1]!;
+                      setResumingReview((previous) =>
+                        key.startsWith('grading:')
+                          ? {
+                              assignmentId: id,
+                              submissionId: key.split(':')[2]!,
+                              request: (previous?.request ?? 0) + 1,
+                            }
+                          : null,
+                      );
+                      go(
+                        key === 'assignment:new'
+                          ? '/assignments/new'
+                          : `/assignments/${id}${key.startsWith('assignment:') ? '/edit' : ''}`,
+                      );
+                    }}
                   >
                     Resume {entry.label}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     className="text-button danger"
                     disabled={work.busy}
                     aria-label={`Discard local copy of ${entry.label}`}
@@ -294,18 +313,27 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                         })
                       ) {
                         work.set(key, null);
-                        if (key === `assignment:${editing?.id ?? 'new'}`) setComposing(false);
+                        if (composing && key === `assignment:${editing?.id ?? 'new'}`)
+                          go(selected ? `/assignments/${selected}` : listPath, { completed: true });
                       }
                     }}
                   >
                     Discard
-                  </button>
+                  </Button>
                 </div>
               ))}
             </div>
           </details>
         )}
-        {section === 'classes' ? (
+        {!knownRoute ? (
+          <section className="panel detail-panel">
+            <h1>Page not found</h1>
+            <p>This page does not exist.</p>
+            <Button className="secondary" onClick={backToList}>
+              Back to assignments
+            </Button>
+          </section>
+        ) : section === 'classes' ? (
           <ClassManager
             token={token}
             teacher={teacher}
@@ -318,7 +346,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           <AccountPanel onChanged={onLogout} />
         ) : (
           <>
-            <section className="page-heading assignment-heading" hidden={composing}>
+            <section className="page-heading assignment-heading" hidden={!isList}>
               <div className="heading-copy">
                 <span className="eyebrow">
                   {teacher ? 'A LITTLE STRUCTURE. ROOM TO GROW.' : 'STAY CURIOUS. KEEP GROWING.'}
@@ -330,18 +358,16 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                     : 'Find your assignments, share your answers, and see your results.'}
                 </p>
                 {teacher && (
-                  <button
+                  <Button
                     className="primary"
                     disabled={work.busy}
                     onClick={() => {
-                      setEditing(undefined);
-                      setComposing(true);
-                      setSelected(null);
-                      setDetailRequest((value) => value + 1);
+                      rememberList(undefined, searchInput);
+                      go('/assignments/new');
                     }}
                   >
                     + New assignment
-                  </button>
+                  </Button>
                 )}
               </div>
               <div className="heading-friend">
@@ -351,215 +377,239 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                 <Owl pose={teacher ? 'reading' : 'wave'} />
               </div>
             </section>
-            <div className={`workspace-grid ${composing ? 'editor-mode' : ''}`}>
-              <section className="panel list-panel" ref={listPanel} hidden={composing}>
-                <div className="panel-title">
-                  <h2>Assignments</h2>
-                  <span className="count">{list.data?.total ?? '—'}</span>
-                </div>
-                <form
-                  className="filters"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setSearch(searchInput.trim());
-                    setPage(1);
-                  }}
-                >
-                  <label>
-                    Search title
-                    <input
-                      type="search"
-                      maxLength={120}
-                      value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
-                    />
-                  </label>
-                  <div className="form-row">
-                    <label>
-                      Filter by class
-                      <select
-                        value={classFilter}
-                        onChange={(e) => {
-                          setClassFilter(e.target.value);
-                          setPage(1);
-                        }}
-                      >
-                        <option value="">All classes</option>
-                        {classes.data?.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Filter by status
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => {
-                          setStatusFilter(e.target.value);
-                          setPage(1);
-                        }}
-                      >
-                        <option value="">All statuses</option>
-                        {teacher && <option value="DRAFT">Draft</option>}
-                        <option value="PUBLISHED">Published</option>
-                        <option value="CLOSED">Closed</option>
-                      </select>
-                    </label>
+            <div className={`assignment-page ${composing ? 'editor-mode' : ''}`}>
+              {isList && (
+                <section className="panel list-panel assignment-list">
+                  <div className="panel-title">
+                    <h2>Assignments</h2>
+                    <span className="count">{list.data?.total ?? '—'}</span>
                   </div>
-                  <button className="secondary">Search</button>
-                </form>
-                {list.loading && (
-                  <p className="empty" role="status">
-                    Loading assignments…
-                  </p>
-                )}
-                {list.error && (
-                  <p className="error" role="alert">
-                    {list.error}
-                    <button className="secondary" onClick={() => setRevision((v) => v + 1)}>
-                      Retry loading assignments
-                    </button>
-                  </p>
-                )}
-                {list.data?.items.length === 0 && (
-                  <div className="empty">
-                    <Owl className="empty-owl" pose={teacher ? 'wave' : 'celebrate'} />
-                    <h3>
-                      {search || classFilter || statusFilter
-                        ? 'No matching assignments.'
-                        : teacher
-                          ? 'Start with one good question.'
-                          : 'You’re all caught up.'}
-                    </h3>
-                    <p>
-                      {search || classFilter || statusFilter
-                        ? 'Try another title, class or status.'
-                        : teacher
-                          ? 'Your first assignment will appear here.'
-                          : 'Published assignments from your classes will appear here.'}
-                    </p>
-                  </div>
-                )}
-                {list.data?.items.map((item) => (
-                  <button
-                    className={`assignment-row ${selected === item.id ? 'selected' : ''}`}
-                    key={item.id}
-                    disabled={work.busy}
-                    onClick={() => {
-                      setSelected(item.id);
-                      setComposing(false);
-                      setDetailRequest((value) => value + 1);
+                  <form
+                    className="filters"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      changeFilters({ search: searchInput.trim(), page: 1 });
                     }}
                   >
-                    <div className="row-meta">
-                      <span>{item.className}</span>
-                      <span
-                        className={`status ${item.status === 'DRAFT' ? 'draft' : new Date(item.dueAt) < new Date() ? 'closed' : 'published'}`}
-                      >
-                        {item.status === 'DRAFT'
-                          ? 'Draft'
-                          : new Date(item.dueAt) < new Date()
-                            ? 'Closed'
-                            : 'Published'}
-                      </span>
+                    <label>
+                      Search title
+                      <InputField
+                        type="search"
+                        maxLength={120}
+                        value={searchInput}
+                        onChange={(e) => {
+                          setSearchInput(e.target.value);
+                          rememberList(undefined, e.target.value);
+                        }}
+                      />
+                    </label>
+                    <div className="form-row">
+                      <label>
+                        Filter by class
+                        <SelectField
+                          value={classFilter}
+                          onChange={(selectedValue) => {
+                            changeFilters({ classId: selectedValue, page: 1 });
+                          }}
+                        >
+                          <option value="">All classes</option>
+                          {classes.data?.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </SelectField>
+                      </label>
+                      <label>
+                        Filter by status
+                        <SelectField
+                          value={statusFilter}
+                          onChange={(selectedValue) => {
+                            changeFilters({ status: selectedValue, page: 1 });
+                          }}
+                        >
+                          <option value="">All statuses</option>
+                          {teacher && <option value="DRAFT">Draft</option>}
+                          <option value="PUBLISHED">Published</option>
+                          <option value="CLOSED">Closed</option>
+                        </SelectField>
+                      </label>
                     </div>
-                    <h3>{item.title}</h3>
-                    <span className="muted">Due {dateLabel(item.dueAt)}</span>
-                    <span className="row-arrow">↗</span>
-                  </button>
-                ))}
-                <div className="pagination">
-                  <button
-                    disabled={page === 1 || list.loading}
-                    onClick={() => setPage((p) => p - 1)}
-                  >
-                    ← Previous
-                  </button>
-                  <span>Page {page}</span>
-                  <button
-                    disabled={!list.data || page * 8 >= list.data.total || list.loading}
-                    onClick={() => setPage((p) => p + 1)}
-                  >
-                    Next →
-                  </button>
-                </div>
-              </section>
-              <section
-                className={`panel detail-panel ${composing ? 'editor-panel' : ''}`}
-                ref={detailPanel}
-                aria-label="Assignment details"
-              >
-                {(selected || composing) && (
-                  <button
-                    className={`text-button detail-back ${composing ? 'editor-back' : ''}`}
-                    disabled={work.busy}
-                    onClick={() => {
-                      if (composing) setComposing(false);
-                      else listPanel.current?.scrollIntoView({ block: 'start' });
-                    }}
-                  >
-                    ↑ Back to assignments
-                  </button>
-                )}
-                {composing ? (
-                  classes.data ? (
-                    <AssignmentForm
-                      key={editing?.id ?? 'new'}
-                      initial={editing}
+                    <Button className="secondary">Search</Button>
+                  </form>
+                  {list.loading && (
+                    <p className="empty" role="status">
+                      Loading assignments…
+                    </p>
+                  )}
+                  {list.error && (
+                    <p className="error" role="alert">
+                      {list.error}
+                      <Button className="secondary" onClick={() => setRevision((v) => v + 1)}>
+                        Retry loading assignments
+                      </Button>
+                    </p>
+                  )}
+                  {list.data?.items.length === 0 && (
+                    <div className="empty">
+                      <Owl className="empty-owl" pose={teacher ? 'wave' : 'celebrate'} />
+                      <h3>
+                        {search || classFilter || statusFilter
+                          ? 'No matching assignments.'
+                          : teacher
+                            ? 'Start with one good question.'
+                            : 'You’re all caught up.'}
+                      </h3>
+                      <p>
+                        {search || classFilter || statusFilter
+                          ? 'Try another title, class or status.'
+                          : teacher
+                            ? 'Your first assignment will appear here.'
+                            : 'Published assignments from your classes will appear here.'}
+                      </p>
+                    </div>
+                  )}
+                  {list.data?.items.map((item) => (
+                    <Button
+                      className="assignment-row"
+                      data-assignment-id={item.id}
+                      key={item.id}
+                      disabled={work.busy}
+                      onClick={() => {
+                        rememberList(item.id, searchInput);
+                        go(`/assignments/${item.id}`);
+                      }}
+                    >
+                      <div className="row-meta">
+                        <span>{item.className}</span>
+                        <span
+                          className={`status ${item.status === 'DRAFT' ? 'draft' : new Date(item.dueAt) < new Date() ? 'closed' : 'published'}`}
+                        >
+                          {item.status === 'DRAFT'
+                            ? 'Draft'
+                            : new Date(item.dueAt) < new Date()
+                              ? 'Closed'
+                              : 'Published'}
+                        </span>
+                      </div>
+                      <h3>{item.title}</h3>
+                      <span className="muted">Due {dateLabel(item.dueAt)}</span>
+                      <span className="row-arrow">↗</span>
+                    </Button>
+                  ))}
+                  <div className="pagination">
+                    <Button
+                      disabled={page === 1 || list.loading}
+                      onClick={() => changeFilters({ page: page - 1 })}
+                    >
+                      ← Previous
+                    </Button>
+                    <span>Page {page}</span>
+                    <Button
+                      disabled={!list.data || page * 8 >= list.data.total || list.loading}
+                      onClick={() => changeFilters({ page: page + 1 })}
+                    >
+                      Next →
+                    </Button>
+                  </div>
+                </section>
+              )}
+              {!isList && (
+                <section
+                  className={`panel detail-panel ${composing ? 'editor-panel' : ''}`}
+                  aria-label="Assignment details"
+                >
+                  {(selected || composing) && (
+                    <Button
+                      className={`text-button detail-back ${composing ? 'editor-back' : ''}`}
+                      disabled={work.busy}
+                      onClick={backToList}
+                    >
+                      ↑ Back to assignments
+                    </Button>
+                  )}
+                  {composing ? (
+                    !teacher ? (
+                      <p role="alert">Only teachers can edit assignments.</p>
+                    ) : editMatch && !detail.data ? (
+                      <p role={detail.error ? 'alert' : 'status'}>
+                        {detail.error || 'Opening assignment…'}
+                      </p>
+                    ) : editing && editing.status !== 'DRAFT' ? (
+                      <p role="alert">
+                        Published assignments cannot be edited.{' '}
+                        <Button
+                          className="text-button"
+                          onClick={() => go(`/assignments/${selected}`)}
+                        >
+                          View assignment
+                        </Button>
+                      </p>
+                    ) : classes.data ? (
+                      <AssignmentForm
+                        key={editing?.id ?? 'new'}
+                        initial={editing}
+                        token={token}
+                        classes={classes.data}
+                        onCancel={() => {
+                          go(selected ? `/assignments/${selected}` : listPath, {
+                            replace: true,
+                            completed: true,
+                          });
+                          setRevision((v) => v + 1);
+                        }}
+                        onCreateClass={() => go('/classes')}
+                        onCreated={(id) => {
+                          go(`/assignments/${id}`, { replace: true, completed: true });
+                          setRevision((v) => v + 1);
+                        }}
+                      />
+                    ) : (
+                      <p role="status">{classes.error || 'Loading classes…'}</p>
+                    )
+                  ) : detail.data ? (
+                    <AssignmentView
+                      key={`${detail.data.id}:${revision}`}
+                      assignment={detail.data}
+                      stats={stats.data}
+                      statsError={stats.error}
+                      resumeReview={
+                        resumingReview?.assignmentId === selected ? resumingReview : null
+                      }
                       token={token}
-                      classes={classes.data}
-                      onCancel={() => {
-                        setComposing(false);
+                      teacher={teacher}
+                      onEdit={() => {
+                        go(`/assignments/${detail.data!.id}/edit`);
+                      }}
+                      onDeleted={() => {
+                        go(listPath, { replace: true, completed: true });
                         setRevision((v) => v + 1);
                       }}
-                      onCreateClass={() => setSection('classes')}
-                      onCreated={(id) => {
-                        setComposing(false);
-                        setSelected(id);
-                        setPage(1);
+                      onChange={() => {
+                        setResumingReview(null);
                         setRevision((v) => v + 1);
                       }}
                     />
                   ) : (
-                    <p role="status">{classes.error || 'Loading classes…'}</p>
-                  )
-                ) : detail.data ? (
-                  <AssignmentView
-                    key={`${detail.data.id}:${revision}`}
-                    assignment={detail.data}
-                    stats={stats.data}
-                    statsError={stats.error}
-                    token={token}
-                    teacher={teacher}
-                    onEdit={() => {
-                      setEditing(detail.data!);
-                      setComposing(true);
-                    }}
-                    onDeleted={() => {
-                      setSelected(null);
-                      setPage(1);
-                      setRevision((v) => v + 1);
-                    }}
-                    onChange={() => setRevision((v) => v + 1)}
-                  />
-                ) : (
-                  <div className="empty detail-empty">
-                    <Owl className="detail-owl" />
-                    <span className="eyebrow">ONE PLACE TO KEEP TRACK</span>
-                    <h2>{detail.loading ? 'Opening assignment…' : 'The details are here.'}</h2>
-                    <p role={detail.error ? 'alert' : undefined}>
-                      {detail.error || 'Choose an assignment to see its questions and progress.'}
-                    </p>
-                    {detail.error && (
-                      <button className="secondary" onClick={() => setRevision((v) => v + 1)}>
-                        Retry opening assignment
-                      </button>
-                    )}
-                  </div>
-                )}
-              </section>
+                    <div className="empty detail-empty">
+                      <Owl className="detail-owl" />
+                      <span className="eyebrow">ONE PLACE TO KEEP TRACK</span>
+                      <h2>
+                        {detail.loading ? 'Opening assignment…' : 'Unable to open assignment'}
+                      </h2>
+                      <p role={detail.error ? 'alert' : undefined}>
+                        {detail.error ||
+                          'This assignment may have been removed or is no longer available.'}
+                      </p>
+                      {detail.error && (
+                        <Button className="secondary" onClick={() => setRevision((v) => v + 1)}>
+                          Retry opening assignment
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </section>
+              )}
             </div>
           </>
         )}
@@ -571,314 +621,5 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
         </footer>
       </main>
     </div>
-  );
-}
-
-function AssignmentView({
-  assignment,
-  stats,
-  statsError,
-  token,
-  teacher,
-  onChange,
-  onEdit,
-  onDeleted,
-}: {
-  assignment: AssignmentDetail;
-  stats: AssignmentStats | null;
-  statsError: string;
-  token: string;
-  teacher: boolean;
-  onChange: () => void;
-  onEdit: () => void;
-  onDeleted: () => void;
-}) {
-  const work = useWork();
-  const [answerDraft, setAnswerDraft, clearAnswers, hasAnswers] = useWorkDraft<{
-    answers: Record<string, number>;
-    retry: { fingerprint: string; id: string } | null;
-  }>(`answers:${assignment.id}`, { answers: {}, retry: null }, assignment.title, {
-    validate: (
-      value,
-    ): value is {
-      answers: Record<string, number>;
-      retry: { fingerprint: string; id: string } | null;
-    } => {
-      if (!value || typeof value !== 'object') return false;
-      const v = value as typeof answerDraft;
-      return (
-        !!v.answers &&
-        typeof v.answers === 'object' &&
-        Object.entries(v.answers).every(([id, choice]) =>
-          assignment.questions.some(
-            (q) =>
-              q.id === id && Number.isInteger(choice) && choice >= 0 && choice < q.options.length,
-          ),
-        ) &&
-        (v.retry === null ||
-          (!!v.retry && typeof v.retry.fingerprint === 'string' && typeof v.retry.id === 'string'))
-      );
-    },
-  });
-  const answers = answerDraft.answers;
-  useEffect(() => {
-    if (assignment.submission && hasAnswers) clearAnswers();
-  }, [assignment.submission, hasAnswers, clearAnswers]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  useWorkGuard(`assignment-action:${assignment.id}`, false, busy);
-  const closed = new Date(assignment.dueAt) <= new Date();
-  async function act(action: 'publish' | 'submit') {
-    if (busy) return;
-    setBusy(true);
-    setError('');
-    try {
-      if (action === 'publish')
-        await request(`/assignments/${assignment.id}/publish`, token, { method: 'POST' });
-      else {
-        const values = assignment.questions.map((q) => ({
-          questionId: q.id,
-          selectedIndex: answers[q.id],
-        }));
-        const fingerprint = JSON.stringify(values);
-        const retry =
-          answerDraft.retry?.fingerprint === fingerprint
-            ? answerDraft.retry
-            : { fingerprint, id: crypto.randomUUID() };
-        setAnswerDraft((old) => ({ ...old, retry }));
-        await request<Submission>(`/assignments/${assignment.id}/submissions`, token, {
-          method: 'POST',
-          body: JSON.stringify({ requestId: retry.id, answers: values }),
-        });
-      }
-      if (action === 'submit') clearAnswers();
-      onChange();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function deleteDraft() {
-    setBusy(true);
-    setError('');
-    try {
-      await request(`/assignments/${assignment.id}`, token, { method: 'DELETE' });
-      work.set(`assignment:${assignment.id}`, null);
-      work.set(`answers:${assignment.id}`, null);
-      onDeleted();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div>
-      <span className="eyebrow">{assignment.className}</span>
-      <h2 className="detail-title">{assignment.title}</h2>
-      <p className="description">
-        {assignment.description || 'Read each question and choose one answer.'}
-      </p>
-      <div className="due-line">
-        Due {dateLabel(assignment.dueAt)} · {assignment.questions.length}{' '}
-        {assignment.questions.length === 1 ? 'question' : 'questions'}
-      </div>
-      {teacher && stats && (
-        <div className="stats">
-          <div>
-            <b>
-              {stats.submitted} / {stats.enrolled}
-            </b>
-            <span>Submitted</span>
-          </div>
-          <div>
-            <b>{stats.averagePercent == null ? '—' : `${stats.averagePercent}%`}</b>
-            <span>Average score</span>
-          </div>
-        </div>
-      )}
-      {statsError && (
-        <p role="alert" className="error">
-          {statsError}
-        </p>
-      )}
-      {assignment.submission && (
-        <div className="result submission-result" role="status">
-          <Owl pose="celebrate" className="result-owl" />
-          <div>
-            <b>
-              Submitted · {assignment.submission.score} / {assignment.submission.maxScore} points
-            </b>
-            <span>{dateLabel(assignment.submission.submittedAt)}</span>
-          </div>
-        </div>
-      )}
-      {assignment.questions.map((q, index) => (
-        <fieldset
-          className="question"
-          key={q.id}
-          disabled={teacher || !!assignment.submission || closed || busy}
-        >
-          <legend>
-            <span className="question-number">{index + 1}</span>
-            {q.prompt}
-            <small>{q.points} pts</small>
-          </legend>
-          {q.options.map((option, i) => (
-            <label className={`option ${teacher && q.correctIndex === i ? 'correct' : ''}`} key={i}>
-              <input
-                type="radio"
-                name={q.id}
-                value={i}
-                checked={answers[q.id] === i}
-                onChange={() =>
-                  setAnswerDraft((old) => ({ ...old, answers: { ...old.answers, [q.id]: i } }))
-                }
-              />
-              {option}
-              {teacher && q.correctIndex === i && <small>Answer key</small>}
-            </label>
-          ))}
-        </fieldset>
-      ))}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {teacher && assignment.status === 'PUBLISHED' && (
-        <SubmissionReport id={assignment.id} token={token} />
-      )}
-      {teacher && assignment.status === 'DRAFT' && (
-        <div className="draft-actions">
-          <button className="secondary" disabled={busy} onClick={onEdit}>
-            Edit draft
-          </button>
-          <button
-            className="secondary danger"
-            disabled={busy}
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete draft
-          </button>
-          {confirmDelete && (
-            <div role="alert">
-              <p>Delete this draft, its questions and any unsaved edits in this tab?</p>
-              <button className="secondary" disabled={busy} onClick={() => setConfirmDelete(false)}>
-                Keep draft
-              </button>
-              <button className="primary" disabled={busy} onClick={() => void deleteDraft()}>
-                Confirm delete
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      {teacher && assignment.status === 'DRAFT' && work.entries[`assignment:${assignment.id}`] && (
-        <p className="footnote">
-          Save or discard your local edits before publishing this assignment.
-        </p>
-      )}
-      {teacher && assignment.status === 'DRAFT' && (
-        <button
-          className="primary wide"
-          disabled={busy || closed || !!work.entries[`assignment:${assignment.id}`]}
-          onClick={() => void act('publish')}
-        >
-          {busy ? 'Publishing…' : 'Publish to class →'}
-        </button>
-      )}
-      {!teacher && !assignment.submission && (
-        <>
-          <p className="footnote">
-            {hasAnswers ? 'Your answers are kept in this tab but have not been submitted. ' : ''}One
-            attempt. Review your answers before submitting.
-          </p>
-          <button
-            className="primary wide"
-            disabled={
-              busy || closed || assignment.questions.some((q) => answers[q.id] === undefined)
-            }
-            onClick={() => void act('submit')}
-          >
-            {closed ? 'Deadline passed' : busy ? 'Submitting…' : 'Submit answers →'}
-          </button>
-        </>
-      )}
-    </div>
-  );
-}
-
-function SubmissionReport({ id, token }: { id: string; token: string }) {
-  const [page, setPage] = useState(1);
-  const [revision, setRevision] = useState(0);
-  const report = useResource<PageResult<SubmissionRow>>(
-    `/assignments/${id}/submissions?page=${page}&pageSize=10`,
-    token,
-    revision,
-  );
-  return (
-    <section className="submission-report">
-      <h3>Student progress</h3>
-      {report.loading && <p role="status">Loading progress…</p>}
-      {report.error && (
-        <p role="alert" className="error">
-          {report.error}
-          <button className="secondary" onClick={() => setRevision((v) => v + 1)}>
-            Retry progress
-          </button>
-        </p>
-      )}
-      {report.data && (
-        <>
-          <p className="footnote">
-            Recipients are fixed when published. Removed students remain in the report.
-          </p>
-          <div className="table-scroll">
-            <table>
-              <caption className="sr-only">Student submission results</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Student</th>
-                  <th scope="col">Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.data.items.map((item) => (
-                  <tr key={item.studentId}>
-                    <td>
-                      {item.name}
-                      <small>
-                        {item.email}
-                        {item.removed ? ' · Removed' : ''}
-                      </small>
-                    </td>
-                    <td>
-                      {item.submission
-                        ? `${item.submission.score} / ${item.submission.maxScore}`
-                        : 'Not submitted'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {report.data.total === 0 && (
-            <p>No students were enrolled when this assignment was published.</p>
-          )}
-          <div className="pagination">
-            <button disabled={page === 1} onClick={() => setPage((v) => v - 1)}>
-              Previous students
-            </button>
-            <span>Page {page}</span>
-            <button disabled={page * 10 >= report.data.total} onClick={() => setPage((v) => v + 1)}>
-              Next students
-            </button>
-          </div>
-        </>
-      )}
-    </section>
   );
 }

@@ -3,6 +3,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status: number,
+    public code?: string,
+    public errors?: { questionId?: string; path: string; code: string; message: string }[],
   ) {
     super(message);
   }
@@ -35,7 +37,11 @@ export async function request<T>(path: string, token?: string, init: RequestInit
       body && typeof body === 'object' && 'message' in body && typeof body.message === 'string'
         ? body.message
         : `Request failed (${response.status}).`;
-    throw new ApiError(message, response.status);
+    const detail =
+      body && typeof body === 'object'
+        ? (body as { code?: string; errors?: ApiError['errors'] })
+        : {};
+    throw new ApiError(message, response.status, detail.code, detail.errors);
   }
   if (!body || typeof body !== 'object')
     throw new ApiError('Invalid response from the server. Please retry.', 502);

@@ -1,4 +1,6 @@
+import { selectChoice } from './controls.js';
 import { test, expect, type Page } from '@playwright/test';
+import { randomUUID } from 'node:crypto';
 const password = 'LocalStudy2026!';
 const origin = 'http://127.0.0.1:5175';
 const nav = (page: Page, name: string) =>
@@ -42,6 +44,7 @@ async function fixture(page: Page, title: string, publish = false) {
       (
         await page.request.post(`/api/assignments/${assignment.id}/publish`, {
           headers: { Origin: origin },
+          data: { version: assignment.version },
         })
       ).ok(),
     ).toBe(true);
@@ -80,6 +83,7 @@ test('new work survives navigation and reload; cancellation, undo and sign-out p
   await nav(page, 'Classes').click();
   await page.getByLabel('Class name').fill('Unfinished class');
   await nav(page, 'Assignments').click();
+  await page.getByRole('button', { name: 'Resume New assignment', exact: true }).click();
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue(
     `Protected ${info.project.name}`,
   );
@@ -138,9 +142,7 @@ test('saved draft edits survive switching assignments, failed save and a version
   await page.getByRole('button', { name: 'Edit draft', exact: true }).click();
   await page.getByLabel('Title', { exact: true }).fill('My protected edits');
   await page.getByRole('button', { name: '↑ Back to assignments', exact: true }).click();
-  await expect(
-    page.getByRole('button', { name: 'Publish to class →', exact: true }),
-  ).toBeDisabled();
+  await expect(page.getByLabel('Search title')).toBeVisible();
   await row(page, other.title).click();
   await page.locator('.work-recovery > summary').click();
   await page.getByRole('button', { name: `Resume ${title}`, exact: true }).click();
@@ -175,7 +177,6 @@ test('saved draft edits survive switching assignments, failed save and a version
   });
   expect(changed.ok(), await changed.text()).toBe(true);
   await page.reload();
-  await page.getByRole('button', { name: `Resume ${title}`, exact: true }).click();
   await expect(
     page.getByText('The saved draft has changed since you started editing.', { exact: false }),
   ).toBeVisible();
@@ -199,6 +200,7 @@ test('student answers and retry identity survive navigation, reload and session 
   await page.getByRole('radio', { name: 'Owl', exact: true }).check();
   await nav(page, 'Classes').click();
   await nav(page, 'Assignments').click();
+  await row(page, title).click();
   await expect(page.getByRole('radio', { name: 'Owl', exact: true })).toBeChecked();
   let firstId = '';
   await page.route(
@@ -214,12 +216,17 @@ test('student answers and retry identity survive navigation, reload and session 
     { times: 1 },
   );
   await page.getByRole('button', { name: 'Submit answers →', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Submit answers', exact: true })
+    .click();
   await expect(page.getByRole('alert')).toContainText('Please retry');
   await page.reload();
-  await page.getByRole('button', { name: `Resume ${title}`, exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Owl', exact: true })).toBeChecked();
+  await page.getByRole('button', { name: '↑ Back to assignments', exact: true }).click();
+  await expect(page.getByLabel('Filter by status')).toBeVisible();
   await page.context().clearCookies();
-  await page.getByLabel('Filter by status').selectOption('PUBLISHED');
+  await selectChoice(page.getByLabel('Filter by status'), 'PUBLISHED');
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   await login(page, 'other.student@example.test');
   await expect(page.getByRole('button', { name: `Resume ${title}`, exact: true })).toHaveCount(0);
@@ -232,6 +239,10 @@ test('student answers and retry identity survive navigation, reload and session 
       req.method() === 'POST' && req.url().endsWith(`/assignments/${assignment.id}/submissions`),
   );
   await page.getByRole('button', { name: 'Submit answers →', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Submit answers', exact: true })
+    .click();
   expect((await request).postDataJSON().requestId).toBe(firstId);
   await expect(page.getByText('Submitted · 10 / 10 points', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: `Resume ${title}`, exact: true })).toHaveCount(0);
@@ -270,8 +281,10 @@ test('sensitive fields warn before loss; invitation codes remain in memory and h
   await nav(page, 'Account').click();
   await expect(page.getByLabel('Current password')).toHaveValue('');
   await nav(page, 'Assignments').click();
+  await expect(page.getByLabel('Filter by status')).toBeVisible();
+  await expect(page.getByText('Loading assignments…', { exact: true })).toHaveCount(0);
   await context.clearCookies();
-  await page.getByLabel('Filter by status').selectOption('PUBLISHED');
+  await selectChoice(page.getByLabel('Filter by status'), 'PUBLISHED');
   await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
   expect(
     await page.evaluate(() => {
@@ -311,6 +324,7 @@ test('unavailable storage keeps work in memory and a pending save blocks navigat
   await expect(page.getByText('Browser storage is unavailable.', { exact: false })).toBeVisible();
   await nav(page, 'Classes').click();
   await nav(page, 'Assignments').click();
+  await page.getByRole('button', { name: 'Resume New assignment', exact: true }).click();
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue(
     `Memory fallback ${info.project.name}`,
   );
@@ -328,6 +342,11 @@ test('unavailable storage keeps work in memory and a pending save blocks navigat
   await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
   await expect(nav(page, 'Classes')).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Sign out', exact: true })).toBeDisabled();
+  await page.evaluate(() => window.history.back());
+  await expect(page).toHaveURL(/\/assignments\/new$/);
+  await expect(page.getByLabel('Title', { exact: true })).toHaveValue(
+    `Memory fallback ${info.project.name}`,
+  );
   release!();
   await expect(page.getByRole('button', { name: 'Edit draft', exact: true })).toBeVisible();
   await expect(
@@ -356,7 +375,6 @@ test('an invalid success response preserves the complete assignment until a real
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
   await expect(page.getByLabel('Option D', { exact: true })).toHaveValue('Answer D');
   await page.reload();
-  await page.getByRole('button', { name: 'Resume New assignment', exact: true }).click();
   await expect(page.getByLabel('Title', { exact: true })).toHaveValue(title);
   await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Edit draft', exact: true })).toBeVisible();
@@ -416,4 +434,233 @@ test('discarding conflicted edits reloads the current saved version without a br
   const saved = await (await page.request.get(`/api/assignments/${original.id}`)).json();
   expect(saved.title).toBe(`${title} resolved`);
   expect(saved.version).toBe(original.version + 2);
+});
+
+test('an older teacher editor draft restores original text without reusing local identities as server IDs', async ({
+  page,
+}, info) => {
+  await login(page);
+  const user = await (await page.request.get('/api/auth/me')).json();
+  const classes = await (await page.request.get('/api/classes')).json();
+  const title = `Older teacher copy ${info.project.name}`;
+  const old = {
+    classId: classes[0].id,
+    title,
+    description: 'Original teaching description',
+    dueDate: '2035-10-01',
+    dueTime: '12:00',
+    questions: [
+      {
+        id: 'old-local-question',
+        prompt: 'Recovered instruction',
+        points: '10',
+        correctId: 'old-b',
+        options: [
+          { id: 'old-a', text: 'Owl' },
+          { id: 'old-b', text: 'Robin' },
+        ],
+      },
+    ],
+  };
+  await page.evaluate(
+    ({ id, draft }) =>
+      sessionStorage.setItem(
+        `classwork:work:v1:${id}`,
+        JSON.stringify({
+          'assignment:new': { label: 'New assignment', persist: true, value: draft },
+        }),
+      ),
+    { id: user.id, draft: old },
+  );
+  await page.reload();
+  await page.getByRole('button', { name: 'Resume New assignment', exact: true }).click();
+  await expect(
+    page.getByText('Recovered work from the previous editor', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('Question text', { exact: true })).toHaveValue(
+    'Recovered instruction',
+  );
+  await expect(
+    page.getByRole('radio', { name: 'Mark option B as correct for question 1', exact: true }),
+  ).toBeChecked();
+  await page.getByRole('button', { name: 'Save draft →', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit draft', exact: true })).toBeVisible();
+  const list = await (
+    await page.request.get(`/api/assignments?search=${encodeURIComponent(title)}`)
+  ).json();
+  const saved = await (
+    await page.request.get(`/api/assignments/${list.items[0].id}?schemaVersion=2`)
+  ).json();
+  expect(saved.questions[0].id).not.toBe('old-local-question');
+  expect(saved.questions[0].config.options[1].id).toBe(
+    saved.questions[0].answerKey.correctOptionId,
+  );
+});
+
+test('older student choices and their unchanged pending legacy request survive the schema upgrade', async ({
+  page,
+}, info) => {
+  await login(page);
+  const title = `Older answer copy ${info.project.name} ${Date.now()}`;
+  const assignment = await fixture(page, title, true);
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await login(page, 'student@example.test');
+  const user = await (await page.request.get('/api/auth/me')).json();
+  const requestId = randomUUID();
+  await page.evaluate(
+    ({ userId, assignmentId, questionId, title, requestId }) =>
+      sessionStorage.setItem(
+        `classwork:work:v1:${userId}`,
+        JSON.stringify({
+          [`answers:${assignmentId}`]: {
+            label: title,
+            persist: true,
+            value: {
+              answers: { [questionId]: 0 },
+              retry: { id: requestId, fingerprint: 'legacy pending request' },
+            },
+          },
+        }),
+      ),
+    {
+      userId: user.id,
+      assignmentId: assignment.id,
+      questionId: assignment.questions[0].id,
+      title,
+      requestId,
+    },
+  );
+  await page.reload();
+  await page.getByRole('button', { name: `Resume ${title}`, exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Owl', exact: true })).toBeChecked();
+  await expect(
+    page.getByText('Recovered work from the previous editor', { exact: true }),
+  ).toBeVisible();
+  const sent = page.waitForRequest(
+    (req) =>
+      req.method() === 'POST' && req.url().endsWith(`/assignments/${assignment.id}/submissions`),
+  );
+  await page.getByRole('button', { name: 'Submit answers →', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Submit answers', exact: true })
+    .click();
+  expect((await sent).postDataJSON()).toEqual({
+    requestId,
+    answers: [{ questionId: assignment.questions[0].id, selectedIndex: 0 }],
+  });
+  await expect(page.getByText('Submitted · 10 / 10 points', { exact: true })).toBeVisible();
+});
+
+test('upload initialization cancellation and overlapping draft saves preserve the newest media references', async ({
+  page,
+}, info) => {
+  await login(page);
+  const title = `Upload race ${info.project.name} ${Date.now()}`;
+  const assignment = await fixture(page, title);
+  await page.reload();
+  await page.getByLabel('Search title').fill(title);
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await row(page, title).click();
+  await page.getByRole('button', { name: 'Edit draft', exact: true }).click();
+  const prompt = page.locator('.question-editor').first().locator('.content-editor').first();
+  const image = {
+    name: 'race.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      'base64',
+    ),
+  };
+  let releaseInit!: () => void;
+  let initialized!: (id: string) => void;
+  const initGate = new Promise<void>((resolve) => {
+    releaseInit = resolve;
+  });
+  const initializedAsset = new Promise<string>((resolve) => {
+    initialized = resolve;
+  });
+  await page.route('**/api/assets/uploads', async (route) => {
+    const response = await route.fetch();
+    initialized((await response.json()).id);
+    await initGate;
+    await route.fulfill({ response });
+  });
+  await prompt.getByLabel('Upload image', { exact: true }).setInputFiles(image);
+  const cancelledId = await initializedAsset;
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Wait for uploads to finish, or choose Save and keep editing.',
+  );
+  await prompt.getByRole('button', { name: 'Cancel upload', exact: true }).click();
+  releaseInit();
+  await expect
+    .poll(async () => (await page.request.get(`/api/assets/${cancelledId}`)).status())
+    .toBe(404);
+  await expect(prompt.locator('.content-block-editor')).toHaveCount(1);
+
+  let releaseUpload!: () => void, initializedAgain!: () => void;
+  const uploadGate = new Promise<void>((resolve) => {
+    releaseUpload = resolve;
+  });
+  const nextInitialized = new Promise<void>((resolve) => {
+    initializedAgain = resolve;
+  });
+  await page.route(
+    '**/api/assets/uploads',
+    async (route) => {
+      const response = await route.fetch();
+      initializedAgain();
+      await uploadGate;
+      await route.fulfill({ response });
+    },
+    { times: 1 },
+  );
+  let releaseSave!: () => void, saved!: () => void;
+  const saveGate = new Promise<void>((resolve) => {
+    releaseSave = resolve;
+  });
+  const savedOnServer = new Promise<void>((resolve) => {
+    saved = resolve;
+  });
+  let heldSave = false;
+  await page.route(
+    `**/api/assignments/${assignment.id}`,
+    async (route) => {
+      if (route.request().method() !== 'PATCH' || heldSave) {
+        await route.continue();
+        return;
+      }
+      heldSave = true;
+      const response = await route.fetch();
+      expect(response.status()).toBe(200);
+      saved();
+      await saveGate;
+      await route.fulfill({ response });
+    },
+    { times: 1 },
+  );
+  await prompt.getByLabel('Upload image', { exact: true }).setInputFiles(image);
+  await nextInitialized;
+  await page.getByRole('button', { name: 'Save and keep editing', exact: true }).click();
+  await savedOnServer;
+  releaseUpload();
+  await expect(
+    prompt.getByRole('button', { name: 'Enlarge Teaching media', exact: true }),
+  ).toBeVisible({ timeout: 30000 });
+  releaseSave();
+  await expect(
+    page.getByRole('button', { name: 'Save and keep editing', exact: true }),
+  ).toBeEnabled();
+  await expect(
+    prompt.getByRole('button', { name: 'Enlarge Teaching media', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Edit draft', exact: true })).toBeVisible();
+  const final = await (
+    await page.request.get(`/api/assignments/${assignment.id}?schemaVersion=2`)
+  ).json();
+  expect(
+    final.questions[0].prompt.filter((block: { type: string }) => block.type === 'image'),
+  ).toHaveLength(1);
 });

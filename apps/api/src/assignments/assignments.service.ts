@@ -16,6 +16,9 @@ import type {
   AssignmentQuery,
 } from '@amp/contracts';
 import { Database, type Connection } from '../database/database.js';
+import { questionV2Schema } from '@amp/contracts';
+import { z } from 'zod';
+import { legacyQuestionCompatible } from './question-storage.js';
 
 const projection = `a.id, a.class_id AS "classId", c.name AS "className", a.title, a.description,
   a.status, a.version, a.due_at AS "dueAt", a.created_at AS "createdAt"`;
@@ -36,11 +39,11 @@ type StoredQuestion = {
 @Injectable()
 export class AssignmentsService {
   constructor(@Inject(Database) private readonly db: Database) {}
-  private requireTeacher(actor: Actor) {
+  requireTeacher(actor: Actor) {
     if (actor.role !== 'TEACHER')
       throw new ForbiddenException('Only teachers can manage assignments.');
   }
-  private async visible(actor: Actor, id: string, tx: Connection = this.db, lockAudience = false) {
+  async visible(actor: Actor, id: string, tx: Connection = this.db, lockAudience = false) {
     const [row] = await tx.query<StoredAssignment>(
       `SELECT ${projection}, c.teacher_id AS "teacherId"
       FROM assignments a JOIN classrooms c ON c.id=a.class_id WHERE a.id=$1`,
@@ -103,6 +106,7 @@ export class AssignmentsService {
     return this.db.transaction(async (tx) => {
       await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
       const { teacherId: _teacher, ...assignment } = await this.visible(actor, id, tx);
+      await this.requireLegacyQuestions(tx, id);
       const questions = await tx.query<StoredQuestion>(
         `SELECT id,prompt,options,points,correct_index AS "correctIndex" FROM questions WHERE assignment_id=$1 ORDER BY position`,
         [id],
@@ -122,6 +126,16 @@ export class AssignmentsService {
           : [];
       return { ...assignment, questions: visibleQuestions, submission: submissions[0] ?? null };
     });
+  }
+  private async requireLegacyQuestions(tx: Connection, id: string) {
+    const rows = await tx.query<{ definition: unknown }>(
+      'SELECT definition FROM questions WHERE assignment_id=$1',
+      [id],
+    );
+    if (rows.some((row) => !legacyQuestionCompatible(questionV2Schema.parse(row.definition))))
+      throw new ConflictException(
+        'This assignment uses the new question editor. Upgrade the client and request schemaVersion=2.',
+      );
   }
   async create(actor: Actor, input: CreateAssignment) {
     this.requireTeacher(actor);
@@ -163,6 +177,7 @@ export class AssignmentsService {
         );
       if (input.classId !== row.classId)
         throw new BadRequestException('The class of an existing draft cannot be changed.');
+      await this.requireLegacyQuestions(tx, id);
       const [valid] = await tx.query('SELECT $1::timestamptz>clock_timestamp() AS valid', [
         input.dueAt,
       ]);
@@ -185,9 +200,10 @@ export class AssignmentsService {
     this.requireTeacher(actor);
     await this.db.transaction(async (tx) => {
       await this.visible(actor, id, tx);
-      const [locked] = await tx.query('SELECT status FROM assignments WHERE id=$1 FOR UPDATE', [
-        id,
-      ]);
+      const [locked] = await tx.query(
+        'SELECT status, version FROM assignments WHERE id=$1 FOR UPDATE',
+        [id],
+      );
       if (!locked || locked.status !== 'DRAFT')
         throw new ConflictException('Only drafts can be deleted.');
       await tx.query('DELETE FROM questions WHERE assignment_id=$1', [id]);
@@ -195,16 +211,32 @@ export class AssignmentsService {
     });
     return { ok: true };
   }
-  async publish(actor: Actor, id: string) {
+  async publish(actor: Actor, id: string, body: unknown) {
     this.requireTeacher(actor);
     await this.db.transaction(async (tx) => {
       const row = await this.visible(actor, id, tx);
       await tx.query('SELECT id FROM classrooms WHERE id=$1 FOR UPDATE', [row.classId]);
-      const [locked] = await tx.query('SELECT status FROM assignments WHERE id=$1 FOR UPDATE', [
-        id,
-      ]);
+      const [locked] = await tx.query(
+        'SELECT status, version FROM assignments WHERE id=$1 FOR UPDATE',
+        [id],
+      );
       if (!locked) throw new NotFoundException('Assignment not found.');
-      if (locked.status === 'PUBLISHED') return;
+      const { version } = z.object({ version: z.number().int().positive() }).strict().parse(body);
+      if (locked.status === 'PUBLISHED') {
+        if (version !== Number(locked.version) - 1 && version !== Number(locked.version))
+          throw new ConflictException(
+            'The assignment version has changed. Reload before publishing.',
+          );
+        return;
+      }
+      if (version !== Number(locked.version))
+        throw new ConflictException('The draft version has changed. Reload before publishing.');
+      const [format] = await tx.query('SELECT schema_version FROM assignments WHERE id=$1', [id]);
+      if (format!.schema_version === 2)
+        throw new ConflictException(
+          'Use the current editor and publish with its expected version.',
+        );
+      await this.requireLegacyQuestions(tx, id);
       const updated = await tx.query(
         `UPDATE assignments SET status='PUBLISHED',published_at=clock_timestamp(),version=version+1
         WHERE id=$1 AND due_at>clock_timestamp() AND status='DRAFT' RETURNING id`,
@@ -241,6 +273,7 @@ export class AssignmentsService {
       };
       const previous = await replay();
       if (previous) return previous;
+      await this.requireLegacyQuestions(tx, id);
       const questions = await tx.query<StoredQuestion>(
         `SELECT id,options,points,correct_index AS "correctIndex" FROM questions WHERE assignment_id=$1`,
         [id],
@@ -290,6 +323,7 @@ export class AssignmentsService {
     return this.db.transaction(async (tx) => {
       await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
       const row = await this.visible(actor, id, tx);
+      await this.requireLegacyQuestions(tx, id);
       const [stats] = await tx.query(
         `SELECT
       (SELECT count(*) FROM ${row.status === 'DRAFT' ? 'class_memberships WHERE class_id=$2' : 'assignment_recipients WHERE assignment_id=$1'}) AS enrolled,
@@ -309,6 +343,7 @@ export class AssignmentsService {
     return this.db.transaction(async (tx) => {
       await tx.exec('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
       const row = await this.visible(actor, id, tx);
+      await this.requireLegacyQuestions(tx, id);
       const audience =
         row.status === 'DRAFT'
           ? 'SELECT student_id,NULL::timestamptz AS removed_at FROM class_memberships WHERE class_id=$2'

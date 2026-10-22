@@ -21,6 +21,20 @@ try {
   const asset = page.text.match(/src="([^"]+\.js)"/)?.[1];
   assert.ok(asset);
   await http.get(asset).expect(200);
+  for (const path of [
+    '/assignments?status=DRAFT&page=2',
+    '/assignments/new',
+    '/assignments/00000000-0000-4000-8000-000000000000',
+    '/assignments/00000000-0000-4000-8000-000000000000/edit',
+    '/classes',
+    '/account',
+  ]) {
+    const clientPage = await http.get(path).set('Accept', 'text/html').expect(200);
+    assert.match(clientPage.headers['content-type'], /text\/html/);
+    assert.equal(clientPage.text, page.text);
+  }
+  await http.get('/api/not-a-route').expect(404);
+  await http.get('/assets/not-a-file.js').expect(404);
   await http.get('/api/health').expect(200);
   const login = await http
     .post('/api/auth/login')

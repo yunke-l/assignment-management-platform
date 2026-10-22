@@ -28,6 +28,9 @@ services:
       SERVE_WEB: 'true'
       HOST: 0.0.0.0
       ALLOW_DEMO_SEED: 'false'
+      ASSET_DIRECTORY: /app/private-assets
+    volumes:
+      - asset_data:/app/private-assets
     depends_on:
       db:
         condition: service_healthy
@@ -48,5 +51,6 @@ services:
         condition: service_healthy
 volumes:
   pg_data:
+  asset_data:
   caddy_data:
   caddy_config:
