@@ -28,7 +28,8 @@
     "test:e2e": "npm run build -w @amp/contracts && playwright test",
     "benchmark": "npm run build -w @amp/contracts && tsx --tsconfig apps/api/tsconfig.json scripts/benchmark.ts",
     "test:built": "node scripts/smoke-built.mjs",
-    "test:recovery": "npm run build && node scripts/recovery-drill.mjs"
+    "test:recovery": "npm run build && node scripts/recovery-drill.mjs",
+    "db:showcase": "npm run build -w @amp/contracts && npm run db:showcase -w @amp/api"
   },
   "overrides": {
     "shell-quote": "^1.11.0"

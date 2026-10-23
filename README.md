@@ -84,12 +84,34 @@ npm run dev:demo
 
 Open **http://localhost:5173**. The API is at `http://127.0.0.1:3100/api`. Use this localhost address to match the browser request Origin.
 
-| Account                      | Password          | Role            |
-| ---------------------------- | ----------------- | --------------- |
-| `teacher@example.test`       | `LocalStudy2026!` | Class A teacher |
-| `student@example.test`       | `LocalStudy2026!` | Class A student |
-| `other.teacher@example.test` | `LocalStudy2026!` | Class B teacher |
-| `other.student@example.test` | `LocalStudy2026!` | Class B student |
+| Account                         | Password          | Role                 |
+| ------------------------------- | ----------------- | -------------------- |
+| `teacher@example.test`          | `LocalStudy2026!` | Class A teacher      |
+| `student@example.test`          | `LocalStudy2026!` | Class A student      |
+| `other.teacher@example.test`    | `LocalStudy2026!` | Class B teacher      |
+| `other.student@example.test`    | `LocalStudy2026!` | Class B student      |
+| `speaking.teacher@example.test` | `LocalStudy2026!` | Speaking Lab teacher |
+
+The demo adds a complete synthetic teaching cohort: **3 teachers, 24 students, 5 classes, 9 published assignments and 1 preparation draft**. Existing local accounts, classes and assignments are retained, so an older database can contain additional records. Alex manages Group A, the Green School Project and Reading Circle; Jordan manages Group B; Priya manages Speaking Lab. The project and speaking groups share students across the two main classes.
+
+| Lesson                   | Submitted | Released grades | Pending review | Demonstrates                                             |
+| ------------------------ | --------: | --------------: | -------------: | -------------------------------------------------------- |
+| 01 · Grammar Check       |     12/12 |              12 |              0 | Closed, fully completed, automatic scoring               |
+| 02 · Green Vocabulary    |      9/12 |               9 |              0 | Closed, missing submissions, grouping/matching/ordering  |
+| 03 · Reading & Evidence  |      8/12 |               5 |              3 | Reading group, mixed progress, grading draft             |
+| 04 · Writing Workshop    |      7/12 |               3 |              4 | Rubric feedback, image attachment, grade revision        |
+| 05 · Listen & Respond    |      5/12 |               2 |              3 | Playable listening material, student audio               |
+| 06 · Project Portfolio   |       6/8 |               4 |              2 | General group, teaching image, historical removed member |
+| 07 · Reading Circle      |     Draft |               — |              — | Editable preparation draft                               |
+| 08 · Group B Grammar     |     10/12 |              10 |              0 | Another teacher’s class and results                      |
+| 09 · Group B Reading     |      6/12 |               3 |              3 | Another teacher’s manual grading queue                   |
+| 10 · Book Recommendation |       4/6 |               2 |              2 | Speaking submission with audio and rubric                |
+
+All synthetic demo data uses English, including account and class names, assignment instructions, question content, student responses, feedback and media captions. The showcase seed also removes the old type prefixes from the known legacy diagnostic assignment while preserving question identifiers, answers and grades. A regression check scans the seeded data for Chinese characters.
+
+There are **67 submissions: 50 released results and 17 pending reviews**, including six saved grading drafts and a published grade correction. The main student account has graded work, a reading submission awaiting review, and an unanswered listening task. Teachers can inspect question analysis, individual answers, feedback, attachments, grading history, class rosters and invitations. Dates and names are synthetic; audio is generated speech. `apps/api/demo-media/` contains the original demo recordings.
+
+`npm run dev:demo` applies this dataset automatically. The guarded `npm run db:showcase` command applies it to the configured development database with `ALLOW_DEMO_SEED=true` and `DEMO_PASSWORD` set. Stop the application before using either database CLI against its PGlite directory. Reruns preserve account passwords, existing submissions, published grades, assignment deadlines and edited showcase titles. They add missing showcase lessons without resetting the dataset. New deadlines are relative to the first creation date and naturally become closed over time.
 
 Demo mode uses PGlite (embedded PostgreSQL) in `.local/database`, without mocked HTTP. Existing data is upgraded through new migrations; rerunning the seed does not overwrite seeded account passwords. Run only one instance per data directory. Press Ctrl+C to stop.
 

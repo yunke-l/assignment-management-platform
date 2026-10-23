@@ -11,7 +11,8 @@
     "db:migrate": "tsx src/database/cli.ts migrate",
     "db:seed": "tsx src/database/cli.ts seed",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts",
-    "accounts": "tsx src/database/accounts.ts"
+    "accounts": "tsx src/database/accounts.ts",
+    "db:showcase": "tsx src/database/cli.ts showcase"
   },
   "dependencies": {
     "@amp/contracts": "0.1.0",

@@ -34,7 +34,7 @@ try {
   controller.signal.throwIfAborted();
   await mkdir(new URL('../.local', import.meta.url), { recursive: true });
   await run(['run', 'db:migrate']);
-  await run(['run', 'db:seed']);
+  await run(['run', 'db:showcase']);
   console.log(
     '\nLocal demo: http://localhost:5173\nTeacher: teacher@example.test\nStudent: student@example.test\nPassword: LocalStudy2026!\n',
   );
