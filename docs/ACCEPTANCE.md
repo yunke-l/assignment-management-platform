@@ -1,32 +1,31 @@
-# 本地版本交付验收
+# Local version delivery acceptance
 
-> 以下 2026-09-24 内容为历史记录。2026-10-08 多题型、媒体、人工批改与兼容升级请查看 [新版实现和 45 项验收映射](MULTI_TYPE_ACCEPTANCE.md) 及 [最新验证记录](VERIFICATION.md#multi-type-upgrade-2026-10-08)。本次按用户最新要求验收浏览器功能和手机浏览器 UI，不要求真机验证。容器与目标部署环境检查留待正式上线；不能将历史 CI 结果用于本次未提交的改动。
+> The 2026-09-24 content below is historical. For the 2026-10-08 upgrade covering multiple question types, media, manual grading, and compatibility, see [Implementation and 45-item acceptance mapping](MULTI_TYPE_ACCEPTANCE.md) and [Latest verification](VERIFICATION.md#multi-type-upgrade-2026-10-08). Per the user's latest requirements, this acceptance covers browser functionality and mobile-browser UI, without requiring physical-device validation. Container and target deployment checks are deferred until release; historical CI results cannot validate these uncommitted changes.
 
-日期：2026-09-24。范围依据用户确认的 [开发计划](DEVELOPMENT_PLAN.md)：完成本地版本和部署准备，项目保持本地，后续按反馈调整。
+Date: 2026-09-24. Scope covers the product and business rules described in [Architecture](ARCHITECTURE.md): complete the local version and deployment preparation, keep the application local, and adjust it based on feedback.
 
-## 范围与证据
+## Scope and evidence
 
-| 要求                             | 交付与验收证据                                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| 产品定义、开发步骤与简历使用说明 | [开发计划](DEVELOPMENT_PLAN.md) 明确角色、MVP、约束、阶段和验收标准；[作品说明](PORTFOLIO.md) 提供简历草案、五分钟演示与代码导航      |
-| 全栈代码初始化及本地启动         | npm workspaces、共享契约、React 页面、NestJS API、SQL 迁移、PGlite 演示和 PostgreSQL 适配；[README](../README.md) 提供安装和启动命令  |
-| 账号、会话与班级管理             | 教师受控邀请、学生邀请码注册、创建及加入班级、邀请码过期/限次/撤销、成员分页及移除、HttpOnly 会话和密码变更撤销                       |
-| 作业创建至成绩闭环               | 草稿创建/预览/编辑/删除、版本冲突检测、发布、学生一次提交、服务端评分、教师统计与学生明细                                             |
-| 已确认的历史作业规则             | 发布时固定受众；新加入不补发；移除立即撤销读写权限，教师保留历史成绩；重新加入不恢复旧权限；HTTP 和页面流程均覆盖                     |
-| 正确性与故障处理                 | 真实 PostgreSQL 39 项测试通过；覆盖归属权限、会话、事务回滚、多连接并发、数据库截止边界、提交幂等、UUID 规范化和一致读快照            |
-| 浏览器可用性                     | 桌面与手机视口 6 项测试通过；覆盖双角色流程、刷新结果、响应丢失重试、键盘、空状态、错误恢复、会话过期和选项编辑；截图与流程录屏已保存 |
-| 查询与性能证据                   | 筛选、稳定排序、分页、报告口径及合成数据执行计划；[性能记录](PERFORMANCE.md) 说明方法、样本和限制                                     |
-| 本地持久化与恢复                 | 演示库升级前已备份；独立 PGlite 合成库完成离线复制恢复、10 张表完整性比对、凭据撤销和历史结果核对；[恢复证据](evidence/recovery.json) |
-| 构建及部署准备                   | 类型检查、生产构建、编译入口冒烟检查通过；提供 Docker、Compose、Caddy、CI、迁移、回滚和恢复操作文档                                   |
+| Requirement                                 | Delivery and acceptance evidence                                                                                                                                                                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Product definition and business rules       | [Architecture](ARCHITECTURE.md) documents system structure, roles, authorization, assignment lifecycle, and historical grade retention                                                                                                           |
+| Full-stack initialization and local startup | npm workspaces, shared contracts, React pages, NestJS API, SQL migrations, PGlite demo, and PostgreSQL support; [README](../README.md) provides installation and startup commands                                                                |
+| Accounts, sessions, and class management    | Controlled teacher invitations, student invitation-code registration, class creation/joining, invitation expiry/usage limits/revocation, member pagination/removal, HttpOnly sessions, and revocation on password change                         |
+| Assignment creation through results         | Draft creation/preview/editing/deletion, version conflict detection, publication, one student submission, server-side grading, teacher statistics, and student details                                                                           |
+| Confirmed historical assignment rules       | Recipients frozen at publication; no old assignments for new members; removal immediately revokes read/write access while teachers retain grades; rejoining does not restore old access; covered by HTTP and browser workflows                   |
+| Correctness and failure handling            | 39 tests passed against real PostgreSQL, covering ownership authorization, sessions, transaction rollback, multi-connection concurrency, database deadline boundaries, submission idempotency, UUID normalization, and consistent read snapshots |
+| Browser usability                           | 6 desktop/mobile-viewport tests passed, covering both roles, refresh persistence, retry after lost responses, keyboard operation, empty states, error recovery, session expiry, and option editing; screenshots and workflow recordings saved    |
+| Query and performance evidence              | Filtering, stable sorting, pagination, report definitions, and synthetic-data execution plans; [Performance record](PERFORMANCE.md) explains methods, samples, and limitations                                                                   |
+| Local persistence and recovery              | Demo database backed up before upgrade; isolated synthetic PGlite database validated offline copy/restore, integrity comparisons for 10 tables, credential revocation, and historical results; [Recovery evidence](evidence/recovery.json)       |
+| Build and deployment preparation            | Type checks, production build, and compiled-entry smoke checks passed; Docker, Compose, Caddy, CI, migration, rollback, and recovery documentation supplied                                                                                      |
 
-详细检查数量和运行环境以 [验证记录](VERIFICATION.md) 为准。源码、配置和合成演示证据保存在 Git，后续按用户要求建立了 [GitHub 私有仓库](https://github.com/yunke-l/assignment-management-platform)；依赖、数据库、环境变量及运行产物排除在版本控制外。应用继续在本地运行，托管 CI 结果可在 [Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml) 查看。
+See [Verification](VERIFICATION.md) for exact check counts and environments. Source, configuration, and synthetic demo evidence are stored in Git. A [Private GitHub repository](https://github.com/yunke-l/assignment-management-platform) was subsequently created at the user's request; dependencies, databases, environment variables, and runtime artifacts are excluded from version control. The application continues to run locally; hosted CI results are available in [Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml).
 
-## 本次范围之外
+## Outside this delivery scope
 
-- 域名、HTTPS 和公开应用部署：等待选定平台后进行。私有 GitHub 代码托管已按后续要求补充。
-- Docker 构建/容器运行：后续代码审核已加入 CI `container` 检查，以对应提交的 Actions 结果为准；生产 PostgreSQL 备份恢复仍须在目标环境实际验收。
-- 真机 Safari、完整辅助技术审计、长期负载与生产容量：不以本地 Chromium 或单轮合成测试替代。
-- 示例性能目标：本地两轮列表 P95 波动明显；最新一轮虽低于 300 ms，仍不等于稳定容量验证，后续目标环境需多轮测量。
-- 项目所有者对代码的独立理解与面试讲解：开发步骤、架构和演示材料已提供，仍需本人实践。
+- Domain, HTTPS, and public application deployment: pending platform selection. Private GitHub code hosting was added following a later request.
+- Docker builds/container execution: subsequent code review added the CI `container` check; use Actions results for the corresponding commit. Production PostgreSQL backup/restore still needs acceptance in the target environment.
+- Physical-device Safari, a full assistive-technology audit, sustained load, and production capacity: local Chromium or one synthetic test run cannot replace these.
+- Example performance target: the two local list-query P95 measurements varied considerably. Although the latest run was below 300 ms, this does not establish stable capacity; multiple runs in the target environment are required.
 
-本次已完成上述本地交付范围。验证证明列出的场景通过，不承诺软件绝无缺陷；后续反馈应落实为可复现问题、修复及相应回归检查。
+The local delivery scope above is complete. Verification establishes that the listed scenarios passed, without promising defect-free software. Subsequent feedback should become reproducible issues, fixes, and corresponding regression checks.

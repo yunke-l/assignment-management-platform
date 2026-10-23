@@ -1,444 +1,444 @@
-# 英语教育平台多题型与图片音频需求文档
+# English education platform: multiple question types, images, and audio requirements
 
-版本：1.1  
-日期：2026 年 10 月 8 日  
-适用对象：产品、设计、前端、后端、测试与运维  
-状态：需求基线（浏览器验收范围已更新）  
-范围：作业出题、学生作答、提交、批改、成绩与资源管理
+Version: 1.1\
+Date: October 8, 2026\
+Audience: product, design, frontend, backend, QA, and operations\
+Status: requirements baseline (browser acceptance scope updated)\
+Scope: assignment authoring, student answers, submission, grading, results, and resource management
 
-本次升级让教师能够布置填空、完形选择、阅读、分组、连线、排序和子母题，并在题干及作答区使用图片与音频。学生可以在教师允许的位置上传图片或音频答案。交付必须覆盖出题到成绩回收的完整流程，不能只增加题型按钮而沿用单选题的数据和判分逻辑。
+This upgrade lets teachers assign fill-in-the-blank, cloze choice, reading, grouping, matching, ordering, and composite questions, using images and audio in prompts and answer areas. Students can upload image/audio answers where teachers allow them. Delivery must cover the complete authoring-to-results workflow, rather than adding question-type buttons while retaining single-choice data and grading logic.
 
-本文中的“必须”是本版本的验收要求，“默认”是未调整配置时的行为。题型规则、数量限制、文件规格和新增接口是本版拟定方案，不代表现有项目已实现。带有“后续”的功能不属于本版验收范围。开发评审调整规则时，应同步修改契约、界面说明、测试用例与本文，不得由前后端分别决定。
+“Must” denotes acceptance requirements for this version; “default” describes behavior without configuration changes. Question rules, count limits, file specifications, and new endpoints are proposed for this version, not claims of existing implementation. Features marked “future” are outside acceptance scope. Changes agreed during development review must update contracts, interface descriptions, tests, and this document together; frontend and backend must not decide separately.
 
-## 1 现有能力与升级目标
+## 1 Existing capabilities and upgrade goals
 
-### 1.1 现有项目基线
+### 1.1 Existing project baseline
 
-以下基线对应本次升级前的共享契约、作业服务、教师编辑器及学生作答页面；升级实现状态见 [实现和验收记录](MULTI_TYPE_ACCEPTANCE.md)。
+The baseline below describes shared contracts, assignment services, teacher editors, and student pages before this upgrade. See [Implementation and acceptance](MULTI_TYPE_ACCEPTANCE.md) for upgrade status.
 
-| 项目           | 当前行为                                          | 本版变化                                                               |
-| -------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
-| 题型           | 纯文本单选题，每题 2–6 个选项                     | 保留单选，新增本需求规定的题型与组合结构                               |
-| 作业容量       | 最多 20 道题                                      | 保留最多 20 个顶层题目，增加叶子题与评分单元总量限制                   |
-| 分值           | 单题整数 1–100，服务端判分                        | 叶子题仍为整数 1–100，增加逐评分单元判分与人工批改                     |
-| 内容           | 题干与选项为字符串                                | 使用结构化内容块，引用独立上传的图片、音频                             |
-| 提交           | 所有题必须作答，每人一次最终提交                  | 按全部可作答叶子题校验，保留一次提交规则                               |
-| 草稿           | 服务端保存要求题目完整有效；编辑有版本冲突检测    | 允许保存未完成题目，发布时执行完整校验                                 |
-| 未完成工作     | 同一标签页暂存，使用 sessionStorage，并有离开保护 | 扩展到多题型答案与资源 ID；不在浏览器存储中保存文件二进制              |
-| 成绩           | 提交后返回总分；教师查看名单和平均分              | 区分待批改与已批改；最终平均分只计入已批改提交                         |
-| 答案可见性     | 学生接口始终不返回正确答案，包括提交之后          | 本版继续保留；答案键和量规参考答案仅教师可见，公开评价维度可供学生阅读 |
-| 附件及手工批改 | 未实现                                            | 新增资源生命周期、鉴权与人工批改闭环                                   |
+| Area                       | Current behavior                                                              | Change in this version                                                                                         |
+| -------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Question types             | Plain-text single choice, 2–6 options per question                            | Retain single choice; add the specified types and composite structures                                         |
+| Assignment capacity        | At most 20 questions                                                          | Retain 20 top-level questions; add total leaf/scoring-unit limits                                              |
+| Points                     | Integer 1–100 per question, server-graded                                     | Leaves remain integer 1–100; add scoring per unit and manual grading                                           |
+| Content                    | Prompts/options are strings                                                   | Structured content blocks referencing independently uploaded images/audio                                      |
+| Submission                 | Every question required; one final submission per student                     | Validate all answerable leaves; retain one-submission rule                                                     |
+| Drafts                     | Server saves require complete valid questions; edits detect version conflicts | Permit incomplete questions; fully validate at publication                                                     |
+| Unfinished work            | Same-tab sessionStorage with navigation protection                            | Extend to multi-type answers and resource IDs; no file binaries in browser storage                             |
+| Grades                     | Total score returned on submission; teacher lists/averages                    | Distinguish pending/graded; final average includes graded submissions only                                     |
+| Answer visibility          | Student APIs never return correct answers, including after submission         | Retain this; answer keys/rubric references stay teacher-only; public assessment dimensions visible to students |
+| Attachments/manual grading | Not implemented                                                               | Add resource lifecycle, authorization, and complete manual-grading workflow                                    |
 
-必须保留以下业务规则：教师只能管理自己的班级和作业；发布时固定学生名单；后来加入者不获得旧作业；移除学生立即撤销旧作业访问和提交权限，教师保留历史记录；重新加入不恢复旧权限。已发布作业不可修改或删除。截止后的 CLOSED 继续由截止时间推导，不作为新增存储状态。
+Retain these business rules: teachers manage only their own classes/assignments; publication freezes recipients; new members do not receive old assignments; student removal immediately revokes old assignment access/submission while teachers retain history; rejoining does not restore old access. Published assignments cannot be edited or deleted. CLOSED remains derived from deadlines, rather than a new stored state.
 
-### 1.2 教学目标与用户任务
+### 1.2 Teaching goals and user tasks
 
-| 用户 | 任务                                     | 达成条件                                             |
-| ---- | ---------------------------------------- | ---------------------------------------------------- |
-| 教师 | 针对词汇、语法、阅读、听力和表达组合任务 | 能选择正确题型，设置答案与分值，在学生视角预览       |
-| 学生 | 阅读或收听材料，完成多种作答操作         | 手机与电脑都能完成，未提交答案可恢复，上传失败可重试 |
-| 教师 | 查看客观题结果，批改图片、音频及开放回答 | 能访问学生原答案和附件，发布准确的最终成绩           |
-| 运维 | 维护教学资源和学生答案文件               | 能控制访问、清理孤立资源，备份与恢复包含文件         |
+| User       | Task                                                                  | Success condition                                                         |
+| ---------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Teacher    | Combine vocabulary, grammar, reading, listening, and expression tasks | Choose suitable types, configure answers/points, preview as a student     |
+| Student    | Read/listen to materials and complete varied interactions             | Work on phone/computer, recover unsubmitted answers, retry failed uploads |
+| Teacher    | Review objective results and grade image/audio/open responses         | Access original answers/attachments and publish accurate final grades     |
+| Operations | Maintain teaching resources and student-answer files                  | Control access, clean orphaned resources, include files in backup/restore |
 
-本版完成指标是第 13 节中的验收用例全部通过。根据用户最新要求，本次交付以浏览器功能可用和手机浏览器 UI 适配为验收范围，不要求真机验证。采用桌面 Chrome 与手机视口测试，重点检查 320、360、390 和 768 像素宽度下的编辑、作答、上传、批改流程。目标部署环境的容器运行、容量和备份恢复属于后续上线检查，不阻塞本次浏览器交付；本地测试不构成生产性能承诺。教学效果、完成率及学习成绩提升需上线后测量，不预先承诺提升比例。
+Completion means all section 13 acceptance cases pass. Per the user's latest requirements, this delivery covers browser functionality and mobile-browser UI, without physical-device validation. Use desktop Chrome and mobile viewports, emphasizing editing, answering, uploading, and grading at 320, 360, 390, and 768 pixels. Target-environment container execution, capacity, and backup/restore are follow-up release checks that do not block this browser delivery. Local tests do not promise production performance. Teaching effectiveness, completion rates, and learning gains require measurement after launch; no improvement percentage is promised beforehand.
 
-## 2 范围与统一术语
+## 2 Scope and shared terminology
 
-### 2.1 首版范围
+### 2.1 First-version scope
 
-本版包含现有单选题、填空、完形选择、分组、连线、排序、阅读题组、子母题，以及用于图片、音频答案的人工批改作答能力。图片与音频支持教师题干素材、教师作答区素材和学生答案附件三种用途。
+This version includes existing single choice, fill-in-the-blank, cloze choice, grouping, matching, ordering, reading groups, general composites, and manually graded responses for image/audio answers. Images/audio serve three purposes: teacher prompt materials, teacher answer-area materials, and student answer attachments.
 
-“分组”指把词语、句子或媒体卡片归入指定类别，不改变学生班级分组或作业分配方式。“连线”首版支持一对一与多对一，不包含一对多或多对多。“排序”指学生重排词语、句子、段落或媒体卡片，与教师调整题目顺序是两项独立功能。
+“Grouping” categorizes words, sentences, or media cards; it does not change student class groups or assignment allocation. “Matching” initially supports one-to-one and many-to-one, excluding one-to-many/many-to-many. “Ordering” lets students reorder words, sentences, paragraphs, or media cards; teacher question reordering is separate.
 
-“阅读”是共享材料加子题的题组；“子母题”是通用共享题干加子题的结构。两者不是独立的答案形式。本版将阅读作为通用题组的一种教学模板，底层使用同一组合模型。
+“Reading” is shared material with child questions; a “general composite” is a shared prompt with children. Neither is an independent answer format. Reading is a teaching template using the same underlying composite model.
 
-### 2.2 术语与计数
+### 2.2 Terms and counts
 
-| 术语       | 定义                                             | 例子                                                                             |
-| ---------- | ------------------------------------------------ | -------------------------------------------------------------------------------- |
-| 顶层题目   | 作业直接包含的独立题或题组                       | 第 1 题填空、第 2 题阅读题组                                                     |
-| 容器题     | 只提供共享材料并组织子题，自身不提交答案、不计分 | 阅读题组、子母题                                                                 |
-| 叶子题     | 没有子题、实际需要学生作答的题                   | 单选、填空、完形选择、分组、连线、排序、人工作答                                 |
-| 评分单元   | 一次独立判分的最小对象                           | 一个填空、一个完形空、一个归类项、一个连线左项；单选、排序和人工作答各为一个单元 |
-| 作答区素材 | 教师提供、用于理解或操作的内容                   | 图片选项、音频配对项、填空上方说明图                                             |
-| 答案附件   | 学生作为答案或补充证据上传的文件                 | 手写答案照片、朗读音频                                                           |
+| Term                 | Definition                                                                  | Example                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Top-level question   | Standalone question or group directly in an assignment                      | Question 1: fill-in-the-blank; question 2: reading group                                                                     |
+| Container question   | Shared materials and child organization only; no answer or score of its own | Reading group, general composite                                                                                             |
+| Leaf question        | Childless question requiring a student answer                               | Single choice, fill-in-the-blank, cloze choice, grouping, matching, ordering, manual response                                |
+| Scoring unit         | Smallest independently scored object                                        | One blank, cloze blank, grouping item, or matching left item; single choice, ordering, and manual response each count as one |
+| Answer-area material | Teacher-provided content for understanding/interaction                      | Image options, audio matching items, explanatory image above blanks                                                          |
+| Answer attachment    | File uploaded by a student as an answer or evidence                         | Handwritten-answer photo, reading-aloud audio                                                                                |
 
-层级限制为“作业 → 顶层叶子题”或“作业 → 容器题 → 叶子题”。不允许容器嵌套容器。完形选择内部的多个空是评分单元，不再转换成第三层子题。
+Allowed hierarchy: “assignment → top-level leaf” or “assignment → container → leaf.” Containers cannot contain containers. Cloze blanks are scoring units, not third-level questions.
 
-例如：一组阅读包含 3 道单选和 1 道含 2 个空的填空，共计 1 个顶层题、4 个叶子题、5 个评分单元。题组总分等于这 4 个叶子题的分值之和，不额外增加母题分数。
+Example: a reading group with 3 single-choice questions and 1 two-blank question counts as 1 top-level question, 4 leaves, and 5 scoring units. Its total is the sum of the 4 leaf scores, without extra parent points.
 
-### 2.3 后续范围
+### 2.3 Future scope
 
-多选题、判断题、共享词库式选词填空、多对多连线、容器嵌套、AI 批改、语音自动评分、OCR 自动识别、浏览器现场录音、视频和 PDF 附件、题库与跨作业素材库、多次作答、限次数播放、跨设备答案同步、即时公布标准答案、成绩导出均留到后续。本版支持上传已有录音，不自动申请麦克风权限。
+Multiple-select, true/false, shared-word-bank blanks, many-to-many matching, nested containers, AI grading, automated speech scoring, OCR, in-browser recording, video/PDF attachments, question banks and cross-assignment media libraries, multiple attempts, playback-count limits, cross-device answer synchronization, immediate answer-key release, and grade export are deferred. This version uploads existing recordings without automatically requesting microphone access.
 
-## 3 角色与页面
+## 3 Roles and pages
 
-| 页面或功能           | 教师权限                                               | 学生权限                                   |
-| -------------------- | ------------------------------------------------------ | ------------------------------------------ |
-| 题目编辑器           | 编辑自己的草稿，配置题型、素材、答案、分值和量规       | 无                                         |
-| 题目预览             | 切换教师视角与学生视角                                 | 无草稿访问权限                             |
-| 已发布作业           | 只读内容与答案配置                                     | 仅有效发布名单中的本人可读学生投影         |
-| 上传题干或作答区素材 | 仅自己的草稿                                           | 无                                         |
-| 上传答案附件         | 无代替学生作答权限                                     | 仅当前可作答作业中允许上传的叶子题         |
-| 查看提交和批改       | 查看本人负责作业的全部提交，可批改已移除学生的历史提交 | 仅本人提交，且仍有该作业访问权限           |
-| 阅读或收听附件       | 可读所属作业教学素材与学生答案                         | 可读授权教学素材与本人答案，不可读他人答案 |
+| Page or feature                     | Teacher permissions                                                      | Student permissions                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| Question editor                     | Edit own drafts; configure types, materials, answers, points, rubrics    | None                                                                      |
+| Question preview                    | Switch teacher/student views                                             | No draft access                                                           |
+| Published assignment                | Read-only content and answer configuration                               | Read own student projection only as an active publication recipient       |
+| Upload prompt/answer-area materials | Own drafts only                                                          | None                                                                      |
+| Upload answer attachments           | Cannot answer on behalf of students                                      | Upload-enabled leaves in currently answerable assignments only            |
+| View submissions/grading            | All submissions for own assignments, including removed students' history | Own submissions only, while assignment access remains valid               |
+| Read/listen to attachments          | Teaching materials and student answers for own assignments               | Authorized teaching materials and own answers; no other students' answers |
 
-不新增面向用户的管理员角色。资源存储、清理和故障处理通过现有运维权限管理。
+No new user-facing administrator role. Storage, cleanup, and failures use existing operational permissions.
 
-## 4 各题型需求
+## 4 Requirements by question type
 
-### 4.1 单选题 SINGLE_CHOICE
+### 4.1 Single choice SINGLE_CHOICE
 
-保留 2–6 个选项，且恰好一个正确答案。选项使用稳定的 optionId，不再使用数组下标作为新版本答案标识。每个选项可以包含文本、图片、音频或组合，内容不能为空；媒体必须有可用于导航的名称或描述。
+Retain 2–6 options with exactly one correct answer. Options use stable optionId values; new-version answers no longer use array indexes. Each option can contain text, images, audio, or combinations and cannot be empty. Media requires a navigable name or description.
 
-学生每题选择一个选项，选择新选项会替换旧选择。播放音频只控制播放器，不能同时选中选项。选择正确得该题全部分数，错误得 0 分。教师新增题目时不默认勾选正确答案；删除正确选项后必须重新设置答案，不自动将另一项标为正确。
+Students select one option; selecting another replaces the previous choice. Audio playback controls only the player and must not select the option. Correct answers receive full points; incorrect answers receive 0. New teacher questions have no correct answer selected by default. Deleting the correct option requires a new answer selection, without automatically marking another option correct.
 
-例：播放 “ship” 与 “sheep” 两个音频选项，要求选择与题干图片对应的单词。正确答案绑定音频卡片 ID，而不是播放器位置。
+Example: play “ship” and “sheep” audio options and ask for the word matching the prompt image. Correctness binds to the audio card ID, not player position.
 
-### 4.2 填空题 FILL_BLANK
+### 4.2 Fill-in-the-blank FILL_BLANK
 
-**教学用途：**词形变化、搭配、介词、时态、短语与听写。
+**Teaching uses:** word forms, collocations, prepositions, tenses, phrases, and dictation.
 
-教师在结构化题干中插入空位，空位使用 blankId，按出现顺序显示为第 1 空、第 2 空等。每题 1–20 个空，支持单词与短语输入。每空配置 1–10 个可接受答案，每个答案为 1–200 个字符且规范化后非空，并配置整数分值、大小写策略；可填写教师可见解析。插入和移动空位不改变 ID；删除空位时同步删除答案配置和分值，并提供撤销。
+Teachers insert blanks in structured prompts, identified by blankId and displayed in occurrence order as blank 1, blank 2, etc. Each question has 1–20 blanks supporting words/phrases. Each blank has 1–10 accepted answers, each 1–200 characters and nonempty after normalization, integer points, a case policy, and optional teacher-only explanation. Inserting/moving blanks preserves IDs. Deletion removes associated answer configuration/points and provides undo.
 
-学生在每个空输入文本，每空最多 200 个字符。提交必须覆盖全部空，纯空白视为未作答。答错也是有效作答，客户端不按正确性阻止提交。
+Students enter at most 200 characters per blank. Every blank is required; whitespace-only input is unanswered. Incorrect input is a valid answer; clients must not prevent submission based on correctness.
 
-匹配规则必须前后端一致，并在教师界面显示：
+Matching rules must agree across frontend/backend and appear in the teacher UI:
 
-1. 标准答案及学生输入都进行 Unicode NFC 规范化。
-2. 去掉首尾空白，连续内部空白合并为一个普通空格。
-3. 默认忽略英文字母 A–Z 的大小写；教师可逐空开启大小写敏感。其他字符不进行不明确的语言相关转换。
-4. 标点、连字符、撇号、数字和重音符号默认严格保留。不自动去除标点，不自动纠正拼写，不使用模糊匹配。
-5. 规范化后与任意一个可接受答案完全相同，该空得满分，否则得 0 分。所有空的得分相加。
+1. Normalize answer keys and student input to Unicode NFC.
+2. Trim surrounding whitespace and collapse consecutive internal whitespace to one ordinary space.
+3. Ignore English A–Z case by default; teachers can enable case sensitivity per blank. Do not apply ambiguous language-dependent conversions to other characters.
+4. Preserve punctuation, hyphens, apostrophes, digits, and accents strictly by default. Do not strip punctuation, autocorrect spelling, or use fuzzy matching.
+5. An exact normalized match to any accepted answer earns full points for that blank; otherwise 0. Sum blank scores.
 
-因此默认 `London` 与 `london` 相同，`a   lot` 与 `a lot` 相同；`its` 与 `it's` 不同，`don't` 与 `do not` 不同，弯撇号 `don’t` 与直撇号 `don't` 不同。教师认为多个写法都可接受时，必须显式录入答案变体。规范化后重复的答案变体不能重复保存。
+Thus `London` matches `london`, and `a   lot` matches `a lot` by default; `its` differs from `it's`, `don't` differs from `do not`, and curly `don’t` differs from straight `don't`. Teachers must explicitly enter accepted variants. Duplicate variants after normalization cannot be saved twice.
 
-例：`She [空1] to school every day.`，可接受答案仅 `goes`，该空 2 分。`go` 是有效作答但得 0 分。
+Example: `She [blank 1] to school every day.`, with only `goes` accepted, worth 2 points. `go` is valid input but scores 0.
 
-### 4.3 完形选择题 CLOZE_CHOICE
+### 4.3 Cloze choice CLOZE_CHOICE
 
-**教学用途：**在篇章语境中判断词汇、衔接与语法。产品名称统一采用“完形选择题”。
+**Teaching uses:** vocabulary, cohesion, and grammar in passage context. Use the consistent product name “Cloze choice.”
 
-教师编辑一段连续材料，在材料中插入 1–20 个空，每空配置独立的 2–6 个选项、一个正确 optionId 和分值。可以附图片或音频。每个 blankId 在材料中恰好出现一次，且必须与配置一一对应。
+Teachers edit continuous material with 1–20 blanks, each with its own 2–6 options, one correct optionId, and points. Images/audio may be attached. Each blankId occurs exactly once and corresponds one-to-one with its configuration.
 
-学生点击空位后选择该空选项，移动端使用就近展开或底部选择面板；不得遮挡当前句子。选择后在材料内显示所选文本，图片或音频选项显示简短标签与查看入口。编号与已答状态清晰可见。每个空只能选一个选项，全部空选择完成后才算该题完成。
+Students click a blank to choose an option. Mobile uses a nearby expansion or bottom selection panel without obscuring the current sentence. Selected text appears in the passage; image/audio options show a short label and a viewing action. Numbers and answered states are clear. Each blank accepts one option; the question is complete only after all blanks are answered.
 
-各空分别判分并求和。各空选项独立，不共享词库，也不因为一个空选过某个单词而使其他空不可选择同文本选项。
+Score blanks independently and sum them. Options are local to each blank, without a shared word bank. Choosing a word in one blank does not disable an option with the same text elsewhere.
 
-例：`Tom was tired, [空1] he finished his homework.`，选项 `but / because / or`，正确答案 `but`。本题不以“所有空都正确”作为拿到任一分数的前提。
+Example: `Tom was tired, [blank 1] he finished his homework.`, options `but / because / or`, correct `but`. Earning any points does not require every blank to be correct.
 
-### 4.4 阅读题组 COMPOSITE with READING
+### 4.4 Reading group COMPOSITE with READING
 
-**教学用途：**主旨、细节、指代、推断、篇章结构和材料理解。
+**Teaching uses:** main idea, details, reference, inference, passage structure, and comprehension.
 
-教师添加共享阅读材料，可组合文本、图片和音频，再添加 1–10 个叶子子题。可以有多段材料及清晰的材料标题。允许子题类型包括单选、填空、完形选择、分组、连线、排序和人工作答。每个子题必须独立给出问题、作答方式及分值。
+Teachers add shared reading material combining text, images, and audio, then 1–10 leaf children. Multiple sections and clear material titles are allowed. Children may be single choice, fill-in-the-blank, cloze choice, grouping, matching, ordering, or manual response. Each child independently specifies its question, answer method, and points.
 
-桌面端在空间足够时提供材料与题目并排布局，材料可独立滚动；手机端提供材料展开收起及返回当前子题入口。查看材料不能清空答案或重置播放状态。子题编号显示为 2.1、2.2 等，内部身份依赖 ID，不依赖显示编号。
+On sufficiently wide desktops, provide side-by-side material/questions with independently scrollable materials. On mobile, support expanding/collapsing material and returning to the current child. Viewing material must not clear answers or reset playback. Display child numbers such as 2.1 and 2.2; internal identity uses IDs rather than display numbers.
 
-母题不提供独立输入框、不收集答案、不设置额外分值。进度按叶子题计算。材料本身不含自动作答空位；需要填空的部分放在填空或完形子题中，避免共享材料与子题之间产生无定义的答案关联。
+Parents have no separate input, answer, or extra points. Progress counts leaves. Shared material itself has no automatic answer blanks; place blanks in fill-in-the-blank/cloze children to avoid undefined links between shared materials and child answers.
 
-例：提供一篇关于城市交通的短文，设置 2 道细节单选、1 道词汇填空、1 道“朗读指定段落并上传音频”的人工作答。前三道自动判分，最后一道待教师批改。
+Example: a passage on urban transport with 2 detail single-choice questions, 1 vocabulary blank, and 1 manual task to read a paragraph aloud and upload audio. The first three are automatic; the last awaits teacher grading.
 
-### 4.5 分组题 GROUPING
+### 4.5 Grouping GROUPING
 
-**教学用途：**词性、语义类别、规则变化、可数与不可数名词等归类。
+**Teaching uses:** parts of speech, semantic categories, inflection rules, and countable/uncountable nouns.
 
-教师设置 2–8 个类别和 2–20 个待归类项。类别有稳定 groupId、名称及可选素材；待归类项有稳定 itemId，可使用文本、图片或音频。每项恰好设置一个正确类别和独立分值。不允许没有正确类别的干扰项；如需“不属于其他类别”，应显式创建 “Other” 类别。每个类别至少对应一个正确项。
+Teachers configure 2–8 categories and 2–20 items. Categories have stable groupId values, names, and optional materials; items have stable itemId values and text/images/audio. Each item has exactly one correct category and independent points. No distractor item may lack a correct category; explicitly create “Other” if needed. Every category must have at least one correct item.
 
-学生通过拖放，或“选择项目 → 点击类别／使用类别选择器”完成归类。每项只能处于一个类别，移动到新类别时从旧类别移除；可移回待分类区。类别容量不限制，也不显示标准答案要求的项目数量，以免泄露答案。
+Students drag items or use “select item → click category/use category selector.” Each item belongs to only one category; moving it removes it from the old category. Items can return to the unclassified area. Category capacity is unlimited; do not reveal expected item counts that could disclose answers.
 
-全部项目归类后可以提交。每项归类正确得该项分数，错误得 0 分，组内排列顺序不影响评分。
+Submission is allowed once every item is categorized. Each correct item earns its points, otherwise 0. Within-group order does not affect grading.
 
-例：将 `apple / banana / carrot / onion` 归入 `Fruit / Vegetable`，每项 1 分，3 项正确得 3/4 分。
+Example: classify `apple / banana / carrot / onion` into `Fruit / Vegetable`, worth 1 point each; 3 correct yields 3/4.
 
-### 4.6 连线题 MATCHING
+### 4.6 Matching MATCHING
 
-**教学用途：**词义、同义词、图片与单词、问答、音频与文本的对应关系。
+**Teaching uses:** meanings, synonyms, images/words, questions/answers, and audio/text associations.
 
-教师设置左侧 2–20 项、右侧 2–30 项，各有稳定 ID，支持文本、图片和音频。每个左项恰好配置一个正确右项和分值，右侧允许干扰项。教师必须选择以下模式之一：
+Teachers configure 2–20 left items and 2–30 right items, each with stable IDs and text/images/audio. Each left item has exactly one correct right target and points; right-side distractors are allowed. Teachers must choose a mode:
 
-| 模式                    | 教师校验                                       | 学生约束                   |
-| ----------------------- | ---------------------------------------------- | -------------------------- |
-| 一对一 ONE_TO_ONE，默认 | 不同左项的正确目标不能重复；右项数量不少于左项 | 一个右项最多被一个左项使用 |
-| 多对一 MANY_TO_ONE      | 允许多个左项指向同一右项                       | 同一个右项可被多个左项选择 |
+| Mode                | Teacher validation                                                                    | Student constraint                                    |
+| ------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| ONE_TO_ONE, default | Correct targets cannot repeat across left items; at least as many right items as left | Each right target used by at most one left item       |
+| MANY_TO_ONE         | Several left items may share a correct target                                         | A right target can be selected by multiple left items |
 
-学生可拖线，也可先点击左项再点击右项。提供连接列表或选择器供键盘及小屏操作。每个左项最多一条连接，换目标替换旧连接；再次取消或点击清除可恢复未连接状态。
+Students can drag connections or click a left item then a right item. Provide a connection list or selectors for keyboard/small screens. Each left item has at most one connection; changing target replaces its old connection. Canceling again or clearing returns it to unconnected.
 
-一对一模式下，若目标已被另一左项占用，提示先清除原连接，不自动删除其他答案。多对一模式不因目标已被使用而禁用。全部左项连接后可以提交，不要求每个右项都被使用。按左项分别判分，不按“画出的线段数量”计分。
+In one-to-one mode, an occupied target prompts the student to clear the existing connection first, without silently deleting another answer. Many-to-one must not disable used targets. All left items must be connected; not every right item must be used. Score each left item, rather than the number of drawn lines.
 
-例：左侧 `cat / dog`，右侧两张对应图片及一张鸟的干扰图。正确连线 1 条、每条 2 分，得 2/4 分。连线不能把左右材料的初始相同行号当作标准答案。
+Example: left `cat / dog`; right corresponding images plus a bird distractor. One correct connection at 2 points each yields 2/4. Initial matching row positions must not serve as answer keys.
 
-### 4.7 排序题 ORDERING
+### 4.7 Ordering ORDERING
 
-**教学用途：**语序、对话顺序、事件顺序和段落结构。
+**Teaching uses:** word order, dialogue sequences, event order, and paragraph structure.
 
-教师设置 2–20 个卡片，分别有稳定 itemId，支持文本、图片与音频，并配置完整正确序列。首版支持最多 5 条可接受完整序列，用于有多种合理语序的题目。每条序列必须包含全部 itemId，且每项恰好出现一次；不得配置前后矛盾的部分顺序条件。
+Teachers configure 2–20 cards with stable itemId values and text/images/audio, plus complete correct sequences. The first version accepts up to 5 complete sequences for multiple valid arrangements. Each sequence contains every itemId exactly once; contradictory partial-order rules are not allowed.
 
-学生通过上移、下移或移至指定位置控件调整顺序。页面当前显示的完整排列直接作为答案，包括未调整的初始排列，无需单独确认；调整后自动更新，刷新恢复相同序列。
+Students use move-up/down or move-to-position controls. The complete displayed arrangement is the answer, including an unchanged initial arrangement, without separate confirmation. Changes update it automatically; refresh restores the same sequence.
 
-首版按整题判分：最终序列与任一可接受序列完全一致得满分，否则得 0 分。不采用位置比例、相邻关系或最长公共子序列给部分分，以免对明显不成立的语句给出难解释的分数。
+The first version grades the whole question: an exact match to any accepted sequence earns full points; otherwise 0. Do not award partial credit by position, adjacency, or longest common subsequence, which could produce hard-to-explain scores for invalid sentences.
 
-服务端在保存完整排序配置时生成一次独立的初始打乱序列，避开所有可接受序列，持久化为学生公开配置，学生视角预览使用同一序列。卡片和答案未改变时，不因再次保存其他字段重新打乱；卡片或标准序列变化时重新校验并在必要时生成新初始序列。发布时冻结该配置，之后刷新与所有学生读取均保持这一首版固定顺序，不在前端接收正确序列后再打乱。如果所有可能排列都被配置为正确答案，说明已没有排序任务，发布时拒绝并要求改写。
+When saving a complete ordering configuration, the server generates an independent shuffled starting sequence that avoids all accepted answers, persists it as public configuration, and uses it in student preview. Saving unrelated fields does not reshuffle unchanged cards/answers. Card or accepted-sequence changes trigger validation and a new starting sequence if needed. Freeze this configuration at publication so refreshes and all students see the same first-version order; do not send correct sequences to the frontend for shuffling. If every permutation is accepted, publication must reject the question and request a rewrite because no ordering task remains.
 
-内容相同的两个卡片仍由 ID 区分。对纯文本完全相同或引用相同媒体组合的卡片，发布校验不允许学生必须区分其隐藏身份；确需重复词语时，可合并成短语，或显式配置所有等价可接受序列。超过 5 条等价序列的题目需改写。不同文件是否表达同一内容由教师在预览时核查，本版不要求自动识别图片或音频的语义相同。
+Cards with identical content still have distinct IDs. Publication validation must not require students to distinguish hidden identities of identical text or identical media combinations. Merge repeated words into phrases or explicitly configure all equivalent accepted sequences. Rewrite questions needing more than 5 equivalent sequences. Teachers check whether different files convey the same content in preview; automatic image/audio semantic-equivalence detection is not required.
 
-例：卡片 `I / like / reading / .`，正确序列为 `I like reading .`；学生看到打乱序列后必须操作或明确确认，系统不会因初始状态而提交答案。
+Example: cards `I / like / reading / .`, correct `I like reading .`. After seeing a shuffled sequence, students must interact or explicitly confirm; the system must not submit an answer merely from the initial state.
 
-### 4.8 子母题 COMPOSITE with GENERAL
+### 4.8 General composite COMPOSITE with GENERAL
 
-教师配置共享题干、可选图片或音频和 1–10 个叶子子题。与阅读题组使用相同的层级、进度和计分规则，区别在模板用途与默认文案。
+Teachers configure a shared prompt, optional images/audio, and 1–10 leaf children. Hierarchy, progress, and scoring match reading groups; teaching purpose and default wording differ.
 
-可用于“听一段对话后选择答案并填写关键词”“看图片后连线并分类”等任务。每个子题可以设置独立题干和素材。共享素材只引用和显示一份，不因子题数复制存储，也不因展开子题自动播放音频。
+Uses include listening to a dialogue then choosing answers/filling keywords, or viewing an image then matching/classifying. Each child can have its own prompt/materials. Shared media is referenced and displayed once, without duplicated storage per child or automatic playback when expanding children.
 
-删除母题会一并删除其子题，执行前展示影响范围，支持编辑阶段撤销。复制母题时，全部题目、选项、空位与卡片生成新 ID，内部答案关系映射到新 ID；同一作业中的不可变媒体资源可复用。首版不提供跨作业复制。
+Deleting a parent deletes its children; show the impact before execution and support undo while editing. Duplicating a parent generates new IDs for every question, option, blank, and card, remapping internal answer relationships. Immutable media can be reused within the same assignment. Cross-assignment copying is excluded initially.
 
-### 4.9 图片音频及开放回答 RESPONSE
+### 4.9 Image/audio and open response RESPONSE
 
-此能力是学生上传答案所必需的补充作答方式，在添加题目的界面显示为“上传与开放作答”，可独立添加，也可作为阅读或子母题的子题。
+This additional answer format enables student uploads. In the add-question UI it appears as “Upload and open response,” either standalone or as a reading/general-composite child.
 
-教师配置允许的输入方式：文本、图片、音频，可组合；至少启用一种。进一步配置必需文本、最少及最多图片数、最少及最多音频数。未启用方式的上下限均为 0；启用图片或音频后最大数量至少为 1；最小数量可以为 0，但不得大于最大数量。文本启用后上限为 2,000 个字符。
+Teachers enable text, images, audio, or combinations, with at least one enabled. Configure required text and minimum/maximum image/audio counts. Disabled methods have minimum/maximum 0; enabled image/audio has a maximum of at least 1. Minimums can be 0 but cannot exceed maximums. Enabled text is limited to 2,000 characters.
 
-所有配置下，答案必须至少含非空文本或一个有效附件，不能产生“允许提交空答案”的组合。例如：图片 1–3 张且文本可选；音频 1 条且文本可选；文本必填且图片可选；图片或音频任选一种，此时两类最小数量均为 0，但整体至少有一个附件。
+Every configuration must require nonempty text or at least one valid attachment, never allow an empty answer. Examples: 1–3 images with optional text; 1 audio with optional text; required text with optional images; either an image or audio, with both category minimums 0 but at least one attachment overall.
 
-教师必须配置总分和可用于批改的评分量规。量规包含 1–10 个维度，各维度有名称、描述及正整数满分，维度满分之和等于该题分值。可使用单一“整体表现”维度。评价维度、要求与满分在作答前对学生公开，参考答案、示范音频及批改锚定样例另存为教师可见字段。系统不根据图片内容或音频时长推断正确性。
+Teachers must configure total points and a usable rubric. Rubrics have 1–10 dimensions, each with a name, description, and positive integer maximum; dimension maxima sum to the question points. A single “Overall performance” dimension is allowed. Dimensions, requirements, and maxima are public before answering. Reference answers, demonstration audio, and grading anchors are separate teacher-only fields. The system does not infer correctness from image content or audio duration.
 
-例：要求上传一段朗读音频，总分 10 分，量规为发音清晰度 4 分、准确性 4 分、流利度 2 分。上传和处理成功只表示附件就绪，仍须最终提交整份作业，得分由教师批改确定。
+Example: upload reading-aloud audio, worth 10 points, with pronunciation clarity 4, accuracy 4, and fluency 2. Successful upload/processing means only that the attachment is ready; students still submit the whole assignment, and teachers determine the score.
 
-## 5 通用编辑与作答规则
+## 5 Shared authoring and answering rules
 
-### 5.1 教师编辑流程
+### 5.1 Teacher authoring workflow
 
-1. 填写作业标题、班级与未来截止时间，添加独立题或题组。
-2. 每个叶子题选择题型，编辑题干、作答区说明与可操作项目。
-3. 设置标准答案或评分量规，配置分值与允许的答案附件。
-4. 保存草稿；首次上传前须创建服务端草稿，取得 assignmentId，并保存准备引用资源的题目及内容位置 ID。可以保存零个题目的草稿，但发布必须至少有一个顶层题和一个叶子题。
-5. 查看发布检查清单，修正题目、答案、分值和资源错误。
-6. 用学生视角预览桌面和手机布局，再发布到当前班级。
+1. Enter assignment title, class, and a future deadline; add standalone questions or groups.
+2. Select each leaf's type and edit prompts, answer-area instructions, and interactive items.
+3. Configure answer keys or rubrics, points, and allowed answer attachments.
+4. Save a draft. Before the first upload, create a server draft to obtain assignmentId and save the question/content-location IDs that will reference resources. Zero-question drafts are allowed, but publication needs at least one top-level question and one leaf.
+5. Review the publication checklist and fix question, answer, point, and resource errors.
+6. Preview desktop/mobile layouts as a student, then publish to the current class.
 
-草稿保存要求标题、班级、截止时间有效，结构字段和 ID 引用合法；可以缺少题干、标准答案、评分量规，可以引用本草稿处于处理中的资源。发布校验要求所有内容完整、引用资源全部 READY。编辑期间删除的项目不能继续被答案键引用。不得用“草稿未完成”作为接受任意 JSON、越权资源或无效层级的理由。
+Draft saves require valid title/class/deadline, structural fields, and ID references. Prompts, answer keys, and rubrics can be incomplete, and resources processing within this draft may be referenced. Publication requires complete content and all referenced resources READY. Deleted items cannot remain in answer keys. Incomplete drafts do not justify arbitrary JSON, unauthorized resources, or invalid hierarchies.
 
-编辑器提供题型标识、题目移动、复制、删除、题组折叠、总分及完成情况。移动题目只改变显示顺序，不能改变 ID 或答案。草稿保存继续使用 version 防止覆盖；出现 409 时保留本地修改，并引导重新加载或人工合并，不自动覆盖服务器。
+The editor provides type labels, moving, duplication, deletion, group collapse, total points, and completion status. Moving changes display order only, preserving IDs/answers. Saves retain version protection; 409 keeps local edits and guides reload/manual merge without automatically overwriting the server.
 
-切换题型会清空不兼容的专用配置，必须先告知将移除的空位、选项、答案、分值规则及子题，并支持取消。可兼容的题干素材及作答区说明保留。容器与叶子之间不做隐式转换。编辑中的操作确认与“已发布内容不可编辑”是不同规则。
+Changing type clears incompatible configuration. First explain the blanks, options, answers, point rules, and children that will be removed, with cancellation available. Retain compatible prompt media and answer-area instructions. Do not implicitly convert between containers and leaves. Editing confirmations are separate from the rule prohibiting changes to published content.
 
-### 5.2 发布校验
+### 5.2 Publication validation
 
-发布时服务端必须在同一一致性流程中验证：
+The server must validate within one consistent publication flow:
 
-- 作业属于当前教师，状态为草稿，截止时间仍在未来，版本为预期版本。
-- 顶层题、叶子题、评分单元及资源数量在本版限制内。
-- 容器只含叶子题，无环路、孤立子题或跨作业引用。
-- 每个叶子题有明确教学指令；可以没有正文文本，但必须有有效素材及简短操作说明。
-- 选项、卡片、空位等内容完整，答案键引用存在；空位出现位置与配置一一对应。
-- 客观题标准答案完整；人工题量规及输入方式合法。
-- 每个叶子题满分为 1–100 的整数，评分单元分值相加与叶子题满分一致。
-- 所有引用资源可读、用途合法且已处理完成，没有失败或待上传占位符。
-- 更新作业状态、冻结内容和资源引用、固定发布名单原子完成。
+- The assignment belongs to the teacher, is a draft, has a future deadline, and matches the expected version.
+- Top-level, leaf, scoring-unit, and resource counts meet this version's limits.
+- Containers contain only leaves, without cycles, orphans, or cross-assignment references.
+- Every leaf has clear teaching instructions. Body text can be absent only with valid material and a short instruction.
+- Options, cards, and blanks are complete; answer-key references exist; blank occurrences match configuration one-to-one.
+- Objective answer keys are complete; manual rubrics/input methods are valid.
+- Each leaf has integer points 1–100, equal to the sum of scoring-unit points.
+- All referenced resources are readable, valid for their purpose, and fully processed, without failed/pending-upload placeholders.
+- Status update, content/resource freezing, and recipient snapshot happen atomically.
 
-新增发布请求携带预期 version；只有首次发布执行该版本校验。重复请求若作业已发布且调用者仍为所有者，返回既有发布结果，不再次固定名单。不得在另一个标签页内容更新后，悄悄发布更新过的题目。
+New publication requests carry the expected version; check it on first publication only. If already published and still owned by the caller, repeated requests return the existing publication without rebuilding recipients. Do not silently publish content updated in another tab after the current preview.
 
-### 5.3 学生作答与未完成工作
+### 5.3 Student answers and unfinished work
 
-题目目录和进度展示“已完成叶子题数／叶子题总数”，母题不计入分母。多空、多项题可显示内部完成度。完成表示输入满足结构要求，不表示答案正确。
+The directory/progress shows “completed leaves / total leaves,” excluding parents. Multi-blank/item questions can show internal progress. Complete means structurally valid input, not a correct answer.
 
-同一标签页保存全部答案状态、上传成功资源的 assetId、当前排序序列及待重试 requestId。sessionStorage 数据带 schemaVersion、userId、assignmentId 和发布版本标识；恢复时重新校验 ID 集合与资源状态。不能将文件、base64、临时 Blob URL 或可过期访问 URL 当作持久答案保存。
+Save all answer states, uploaded assetId values, current ordering sequences, and retry requestId within the same tab. sessionStorage records include schemaVersion, userId, assignmentId, and publication-version identity. Recovery revalidates ID sets and resource states. Do not persist files, base64, temporary Blob URLs, or expiring access URLs as answers.
 
-已上传且仍保留的附件刷新后可通过 assetId 重新预览；上传中或未完成处理的文件在刷新后恢复为待处理状态或明确要求重选，不能显示为“已提交”。临时 Blob URL 仅用于本次页面本地预览。退出登录清理同标签页未提交工作，沿用现有离开和退出确认行为。
+Uploaded attachments still retained can be previewed again by assetId after refresh. Uploading/unprocessed files recover as pending or explicitly require reselection, never as “submitted.” Temporary Blob URLs serve only this page's local preview. Logout clears same-tab unsubmitted work, retaining existing navigation/logout confirmation behavior.
 
-首版不保证跨标签页或跨设备恢复。两端同时最终提交时，由数据库一次提交约束裁决；失败端加载已提交结果，不能覆盖胜出答案。浏览器存储不可用时显示“尚未保存，请保留此页面”，不可声称草稿已可靠保存。
+Cross-tab/device recovery is not guaranteed initially. Concurrent final submissions are decided by the database's one-submission constraint; the losing client loads saved results without overwriting winning answers. If browser storage is unavailable, show “Not saved yet; keep this page open,” without claiming reliable draft persistence.
 
-### 5.4 提交完整性
+### 5.4 Submission completeness
 
-提交必须恰好包含全部叶子题各一条答案；不包含母题答案。每题内部必须满足空位、项目、序列和附件要求。禁止重复题 ID、重复内部 ID、未知 ID、其他作业 ID、其他学生的资源、客户端分数及答案键。
+A submission must contain exactly one answer for every leaf and none for parents. Internal blanks, items, sequences, and attachments must meet requirements. Reject duplicate question/internal IDs, unknown IDs, other assignment IDs, other students' resources, client scores, and answer keys.
 
-所有叶子题都必须作答。首版不开放“跳过题目”“未作答按零分提交”。图片或音频不能代替客观题要求的选择、填空、分组、连线或排序答案。
+Every leaf is required. Skipping questions or submitting unanswered questions for zero is excluded initially. Images/audio cannot replace required objective choices, blanks, grouping, matching, or ordering answers.
 
-提交按钮前显示叶子题完成数、附件就绪情况、一次提交提示与最终确认。只有服务端返回已保存 submissionId 后才能显示提交成功并清除本地答案。网络超时保留原请求和答案，不自动生成第二份提交。
+Before submission, show leaf completion, attachment readiness, the one-submission notice, and final confirmation. Only a server-confirmed saved submissionId permits a success state and local-answer cleanup. Network timeouts preserve the original request/answers without automatically generating a second submission.
 
-## 6 图片与音频
+## 6 Images and audio
 
-### 6.1 使用位置与评分关系
+### 6.1 Locations and scoring relationships
 
-| 位置                           | 上传者 | 能力                                 | 对评分的影响                         |
-| ------------------------------ | ------ | ------------------------------------ | ------------------------------------ |
-| 叶子题题干、母题共享材料       | 教师   | 按内容顺序插入图片、音频、说明文字   | 作为教学材料，不自动产生分值         |
-| 作答区说明                     | 教师   | 在输入或操作控件上方添加图片、音频   | 作为操作指引，不是学生答案           |
-| 选项、分类项、连线项、排序卡片 | 教师   | 文本与媒体组合，纯媒体项有可访问名称 | 由项目 ID 与标准答案关系判分         |
-| RESPONSE 答案区                | 学生   | 按教师配置上传图片、音频，填写文本   | 人工批改                             |
-| 客观叶子题补充附件区           | 学生   | 仅教师开启时允许；默认关闭           | 保存为证据，首版不改变客观题自动得分 |
+| Location                                                | Uploader | Capability                                                      | Scoring effect                                                   |
+| ------------------------------------------------------- | -------- | --------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Leaf prompts and parent shared material                 | Teacher  | Insert images, audio, and explanatory text in content order     | Teaching material; no automatic points                           |
+| Answer-area instructions                                | Teacher  | Images/audio above input or interaction controls                | Instructions, not student answers                                |
+| Options, grouping items, matching items, ordering cards | Teacher  | Text/media combinations; media-only items have accessible names | Graded by item IDs and answer-key relationships                  |
+| RESPONSE answer area                                    | Student  | Images/audio/text according to teacher configuration            | Manual grading                                                   |
+| Objective-leaf supplementary attachments                | Student  | Available only if enabled by teacher; off by default            | Evidence only; no change to automatic objective scores initially |
 
-教师开启客观题补充附件时，界面明确显示“附件不参与本题自动评分”。补充附件均为可选，最多 3 张图片和 1 条音频；需要按附件评分时应另设 RESPONSE 子题。母题不能收集学生附件，应设置具体子题承载作答。
+When objective supplementary attachments are enabled, show “Attachments do not affect automatic scoring for this question.” All are optional, limited to 3 images and 1 audio. Use a separate RESPONSE child to grade attachments. Parents cannot collect attachments; use specific answerable children.
 
-### 6.2 本版拟定文件规格
+### 6.2 Proposed file specifications
 
-以下均为配置化上限，服务端为最终校验方。MiB 按 1,048,576 字节计算。
+All are configurable upper bounds, with the server as final validator. One MiB is 1,048,576 bytes.
 
-| 项目                     | 首版规格                                                                                            |
-| ------------------------ | --------------------------------------------------------------------------------------------------- |
-| 图片输入                 | JPEG、PNG、静态 WebP；扩展名与实际内容须相符                                                        |
-| 单张图片                 | 最大 10 MiB；宽高均不超过 10,000 像素且总像素不超过 2,000 万                                        |
-| 图片处理                 | 正确处理旋转方向，生成缩略图和可读显示版本；移除不必要的 EXIF 等元数据                              |
-| 音频输入                 | MP3、PCM WAV、M4A 容器中的 AAC-LC 音频；其他编码不因后缀相同而自动接受                              |
-| 单条音频                 | 最大 50 MiB，时长大于 0 且不超过 10 分钟，以服务端解码结果为准                                      |
-| 音频处理                 | 生成目标浏览器实测可播放的统一 MP3 版本，保留原始提交音频供教师核对；不得自动去噪或改变教学发音内容 |
-| 每处教学内容             | 每个题干、共享材料、作答区说明或选项／卡片，最多 10 张图、5 条音频                                  |
-| RESPONSE 单题答案        | 最多 5 张图片、2 条音频；教师可下调上限                                                             |
-| 作业教学资源总量         | 最多 100 个不同 assetId，上传原文件总大小不超过 300 MiB                                             |
-| 单次学生最终答案资源总量 | 最多 30 个不同 assetId，上传原文件总大小不超过 100 MiB，含客观题补充附件                            |
-| 学生临时上传工作区       | 每学生每作业最多 60 个文件、200 MiB，供未提交附件及替换使用，不增加最终提交额度                     |
-| 教师临时上传工作区       | 每教师每草稿最多 120 个文件、400 MiB，供未绑定资源及替换使用，不增加已保存教学资源额度              |
-| 媒体存储口径             | 上述大小均按不同原始资源去重计量；缩略图与转码文件另计实际存储容量                                  |
+| Area                               | First-version specification                                                                                                                                                  |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Image input                        | JPEG, PNG, static WebP; extension must match actual content                                                                                                                  |
+| Each image                         | At most 10 MiB; width/height each ≤10,000 pixels and total ≤20 million pixels                                                                                                |
+| Image processing                   | Handle orientation correctly, generate thumbnails/readable display versions, remove unnecessary metadata such as EXIF                                                        |
+| Audio input                        | MP3, PCM WAV, AAC-LC in M4A; other codecs are not accepted merely because the extension matches                                                                              |
+| Each audio                         | At most 50 MiB; duration >0 and ≤10 minutes, based on server decoding                                                                                                        |
+| Audio processing                   | Generate a unified MP3 verified playable in target browsers; retain original submitted audio for teacher checks; no automatic denoising or changes to teaching pronunciation |
+| Each teaching-content location     | Each prompt, shared material, answer-area instruction, option/card: at most 10 images and 5 audio files                                                                      |
+| RESPONSE answer per question       | At most 5 images and 2 audio files; teachers can lower limits                                                                                                                |
+| Teaching resources per assignment  | At most 100 distinct assetId values and 300 MiB of uploaded originals                                                                                                        |
+| Resources per final student answer | At most 30 distinct assetId values and 100 MiB of uploaded originals, including objective evidence                                                                           |
+| Student temporary workspace        | Per student/assignment: 60 files, 200 MiB for unsubmitted/replacement attachments; does not increase final quota                                                             |
+| Teacher temporary workspace        | Per teacher/draft: 120 files, 400 MiB for unbound/replacement resources; does not increase saved teaching-resource quota                                                     |
+| Storage accounting                 | Deduplicate distinct original assets for these limits; thumbnails/transcodes consume additional physical storage                                                             |
 
-单项限制与总量限制同时成立。编辑器实时展示总量。教师可在 RESPONSE 中分别下调单张图片及单条音频的大小上限，公开配置保存 `maxImageBytes` 和 `maxAudioBytes`；初始化上传及实际文件校验均执行这些限制。
+Individual and aggregate limits apply together. The editor shows totals live. Teachers can lower per-image/audio limits in RESPONSE; public configuration stores `maxImageBytes` and `maxAudioBytes`, enforced during upload initialization and actual-file validation.
 
-发布校验根据每题的必需文本、最少附件数量及“至少一种有效输入”规则，计算完成整份作业所需的最小附件组合。存在“图片或音频任选”时，分别校验各条可选路径；取这些最小完整组合中占用文件数及按单文件上限计量后字节数的最大值，要求分别不超过 30 和 100 MiB。超过时教师必须缩减必需数量或下调单文件上限。可选的额外附件使用剩余额度，界面预留尚未满足的必需项额度，超出时提示移除可选附件，不要求删除必需答案。
+Publication validation calculates the minimum attachment combinations needed to complete the assignment using required text, minimum attachment counts, and the “at least one valid input” rule. For alternatives such as image or audio, validate each path. Across minimal complete combinations, take the largest file count and byte total measured using per-file limits; these must not exceed 30 and 100 MiB respectively. Teachers must reduce required counts or per-file limits if exceeded. Optional extras use remaining quota; the UI reserves capacity for unmet requirements and asks users to remove optional attachments rather than required answers.
 
-临时工作区累计 READY 原文件、PROCESSING 文件及正在传输的预占额度；失败或取消后释放额度。最终作业或提交的限制仅统计实际绑定的资源 ID，不能把已经取消引用的临时文件算入最终答案。工作区达到上限时允许用户清理未绑定文件后重试；最终提交必须再次验证实际文件、引用和总量，工作区上限不能绕过最终上限。
+Temporary workspaces count READY originals, PROCESSING files, and reserved in-flight quota; failures/cancellations release quota. Final assignment/submission limits count only actually bound IDs, excluding temporary files no longer referenced. At workspace limits, allow cleanup of unbound files and retry. Final submission revalidates actual files, references, and totals; workspace limits cannot bypass final limits.
 
-本版不支持 GIF、SVG、HEIC、视频、压缩包或文档文件。手机选图返回 HEIC 时给出转换或重选提示；不能承诺所有手机相册格式都能直接上传。本版验收使用浏览器文件上传；相机入口取决于浏览器与系统文件选择能力，不属于本次验收要求。
+GIF, SVG, HEIC, video, archives, and documents are unsupported. If mobile selection returns HEIC, explain conversion/reselection; do not promise support for every gallery format. Acceptance uses browser file uploads. Camera entry depends on browser/system pickers and is outside this acceptance scope.
 
-### 6.3 图片展示与音频播放
+### 6.3 Image display and audio playback
 
-图片默认等比例缩放，不裁切影响答题的内容；支持点击放大、关闭及手机查看。教师可设置短说明及替代文本。学生附件可按“学生上传图片 1”生成中性标签，学生可修改说明。不得把正确选项、答案或听写原文放进学生可见文件名、替代文本或播放器标签。
+Scale images proportionally without cropping answer-relevant content. Support click-to-enlarge, close, and mobile viewing. Teachers can provide captions/alt text. Student attachments may receive neutral labels such as “Student image 1,” with editable captions. Student-visible filenames, alt text, and player labels must not contain correct choices, answers, or dictation transcripts.
 
-音频默认不自动播放，提供播放、暂停、进度、时长、音量及 0.75／1／1.25／1.5 倍速。本版不限重复播放次数。页面同一时间只播放一条音频，切换音频会暂停此前播放；选择卡片与播放操作有独立控件。支持暂停后继续及进度跳转，加载失败展示重试，切换题目不把播放结束当成已作答。
+Audio does not autoplay. Provide play, pause, progress, duration, volume, and 0.75/1/1.25/1.5 speed. Replays are unlimited initially. Only one audio plays at a time; starting another pauses the previous one. Card selection and playback have separate controls. Support resume/seeking, retry on loading failure, and never treat playback completion as an answer when switching questions.
 
-音频正文转写若由教师填写，本版作为教师可见内容，不发送到学生接口。听写和听力任务不能因为可访问标签而暴露原文；教学中的替代任务由教师另外布置，本需求不声明完整达到任何可访问性认证。
+Teacher-entered transcripts remain teacher-only and are excluded from student APIs. Accessible labels must not disclose dictation/listening text. Teachers assign alternative learning tasks separately; these requirements do not claim full accessibility certification.
 
-音频内容接口需支持经过鉴权的 HTTP 范围请求，用于跳转与分段读取。HTTP 范围请求的语义参考 [MDN HTTP range requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Range_requests)。倍速及移动端音量控件以目标浏览器实测结果验收，操作系统限制时需提供可理解的系统音量提示。
+Audio content endpoints must support authenticated HTTP range requests for seeking/partial reads. See [MDN HTTP range requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Range_requests) for semantics. Validate speed/mobile volume controls in target browsers; explain system volume control where the OS limits it.
 
-### 6.4 上传状态与资源生命周期
+### 6.4 Upload states and resource lifecycle
 
-上传界面提供文件名、大小、进度、取消、失败原因、重试及删除入口；处理阶段与传输阶段分开显示。一次只能将完整处理成功的资源作为最终答案引用。
+Upload UI shows filename, size, progress, cancellation, failure reason, retry, and removal. Processing and transfer phases are distinct. Only completely processed resources may be referenced in final answers.
 
-资源状态为 `UPLOADING → PROCESSING → READY`，失败进入 `FAILED`，取消或清理进入 `DELETED`。失败重试可产生新上传任务和新 assetId，旧引用必须清理；处理回调只能更新合法状态，不得让已删除资源重新变为 READY。
+States: `UPLOADING → PROCESSING → READY`; failures become `FAILED`, cancellation/cleanup becomes `DELETED`. A retry can create a new task/assetId; clean old references. Processing callbacks may update only valid states and must never revive deleted assets as READY.
 
-资源先上传、后绑定。教师资源必须绑定本人服务端草稿；学生资源必须绑定本人、已发布且当前可作答的作业和叶子题。资源记录有用途 `TEACHING` 或 `ANSWER`，不得将学生答案直接当教学素材，也不得把别人上传的文件 ID 冒充自己的答案。
+Upload first, bind later. Teacher assets bind to their own server drafts. Student assets bind to themselves and a published, currently answerable assignment/leaf. Purpose is `TEACHING` or `ANSWER`; student answers cannot directly become teaching material, and another uploader's file ID cannot be claimed as one's own answer.
 
-传输完成后，服务端执行类型识别、解码、像素或时长校验、安全检测和派生文件处理，完成后才进入 READY。前端预览成功、文件扩展名正确、HTTP 上传成功都不等于资源已经 READY。
+After transfer, the server performs type identification, decoding, pixel/duration validation, safety checks, and derivative processing before READY. Successful frontend preview, correct extension, or successful HTTP upload does not establish READY.
 
-资源引用和清理规则：
+Resource reference and cleanup rules:
 
-- 教师上传后 24 小时内未被服务端草稿引用的资源可清理；服务端已保存草稿中的引用不会因创建时间自动过期。
-- 学生未最终提交的答案资源，保留到作业截止后 7 天再清理；截止后保留不赋予迟交权限。
-- 学生在提交前可以移除或替换答案附件。最终提交绑定文件后资源不可更换或删除，教师批改期间也不可改写。
-- 草稿移除附件只移除引用；同一资源仍有其他有效引用时不能删除底层对象。无引用资源进入 7 天清理宽限期。
-- 草稿删除清理其引用；已发布教学资源和已提交答案资源随历史作业长期保留，首版不自动删除业务记录。
-- 清理任务删除前重新检查状态与有效引用，并与发布、提交的绑定事务协调。数据库绑定失败不能留下“已提交”文件标记；对象写入成功但记录失败的孤立文件由清理任务回收。
+- Teacher uploads unreferenced by a server draft for 24 hours may be cleaned. Saved draft references do not expire merely because of resource age.
+- Unsubmitted student answer assets are retained until 7 days after the deadline; retention does not permit late submission.
+- Students may remove/replace attachments before final submission. Once bound by final submission, files cannot change or be deleted, including during teacher grading.
+- Removing a draft attachment removes only its reference. Other valid references prevent deletion of the underlying object. Unreferenced assets enter a 7-day cleanup grace period.
+- Draft deletion removes its references. Published teaching assets and submitted answer assets remain with historical assignments; the first version does not automatically delete business records.
+- Before deletion, cleanup rechecks state/valid references and coordinates with publication/submission binding transactions. Failed database binding must not leave “submitted” file markers. Cleanup reclaims orphaned objects whose writes succeeded but database records failed.
 
-教师本地未保存修改引用了临时资源时，界面提示 24 小时有效期。删除资源后如撤销编辑，只能在文件仍保留且授权合法时恢复引用；已实际清理时要求重新上传。
+When unsaved local teacher edits reference temporary assets, show the 24-hour validity. Undoing deletion can restore references only while files remain retained and authorized. Already-cleaned files require reupload.
 
-### 6.5 安全与访问
+### 6.5 Security and access
 
-采用文件类型白名单，校验扩展名、声明 MIME、文件特征及真实解码结果，不只信任浏览器 Content-Type。文件名不作为物理路径，服务端生成存储键；拒绝可执行内容与非法类型，处理进程限制资源消耗，进入 READY 前完成安全检测。此类上传控制参考 [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html)。
+Use file-type allowlists and validate extension, declared MIME, signatures, and real decoding, rather than trusting browser Content-Type. Filenames are not physical paths; the server generates storage keys. Reject executable/invalid content, limit processing resource consumption, and complete safety checks before READY. See [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html).
 
-生产文件位于私有对象存储或非公开文件目录，不直接暴露公开静态 URL。本版通过鉴权的内容代理读取，每次 GET、HEAD 和 Range 请求都检查作业与资源权限。沿用会话与 Origin 防护；不因新增 multipart 上传绕过现有授权。
+Production files reside in private object storage or a nonpublic directory without public static URLs. This version reads through an authenticated content proxy; every GET, HEAD, and Range checks assignment/resource permissions. Retain sessions and Origin protection; multipart upload must not bypass authorization.
 
-未登录、其他教师、非发布名单学生、已移除学生不得访问受保护资源；学生不能访问其他学生答案。资源使用不同的原始文件与显示文件访问策略：学生读取教学媒体的安全显示版本，读取本人答案的可显示版本；所属教师可读取提交原始文件用于核对。文件返回正确类型并防止 MIME 嗅探；资源元数据不返回存储密钥、真实路径或答案相关原文件名。
+Unauthenticated users, other teachers, non-recipient students, and removed students cannot access protected assets. Students cannot read others' answers. Originals and display files have separate policies: students receive safe display versions of teaching media and displayable versions of their own answers; the responsible teacher may read submitted originals for checking. Return correct types and prevent MIME sniffing. Metadata excludes storage keys, real paths, and answer-revealing original filenames.
 
-本版不发放可绕过撤权检查的长期签名链接。鉴权资源不允许共享公共缓存，权限撤销后下一次资源请求必须失败。已经下载到设备的字节无法通过撤销服务器权限收回，验收以新请求被拒绝为准。
+Do not issue long-lived signed URLs that bypass revocation. Authenticated resources cannot use shared public caches; the next resource request after revocation must fail. Bytes already downloaded cannot be recalled by server revocation; acceptance checks refusal of new requests.
 
-限流按账号及作业上下文控制上传频率和并发，单账号最多同时传输 3 个文件，上传初始化最多 30 次／分钟。使用共享计数或等效一致限制，不能声称进程内限流支持多实例全局限制。额度预占、失败释放和实际大小结算必须支持并发，不能仅在客户端累计。
+Limit upload frequency/concurrency by account and assignment context: at most 3 simultaneous file transfers per account and 30 upload initializations/minute. Use shared counters or equivalently consistent limits; process-local limits cannot be claimed as global multi-instance limits. Quota reservation, failure release, and actual-size settlement must support concurrency, beyond client-side totals.
 
-## 7 计分 批改与成绩
+## 7 Scoring, grading, and results
 
-### 7.1 分值和自动判分
+### 7.1 Points and automatic grading
 
-本版保持整数分，避免改变现有整数成绩语义：
+Retain integer scores to preserve existing grade semantics:
 
-| 题型         | 最小评分单元         | 评分方式                     |
-| ------------ | -------------------- | ---------------------------- |
-| 单选         | 整题                 | 正确全分，否则 0             |
-| 填空         | 每个空               | 匹配可接受答案得该空全分     |
-| 完形选择     | 每个空               | 选项 ID 正确得该空全分       |
-| 分组         | 每个待归类项         | 类别 ID 正确得该项全分       |
-| 连线         | 每个左项             | 目标 ID 正确得该左项全分     |
-| 排序         | 整题                 | 完整序列匹配得全分，否则 0   |
-| RESPONSE     | 整题中的人工量规维度 | 教师填写各维度整数得分后汇总 |
-| 阅读和子母题 | 无独立评分单元       | 只汇总子题，不再计分         |
+| Type                      | Smallest scoring unit                       | Scoring                                                   |
+| ------------------------- | ------------------------------------------- | --------------------------------------------------------- |
+| Single choice             | Whole question                              | Full points if correct, otherwise 0                       |
+| Fill-in-the-blank         | Each blank                                  | Full blank points for an accepted match                   |
+| Cloze choice              | Each blank                                  | Full blank points for correct option ID                   |
+| Grouping                  | Each item                                   | Full item points for correct category ID                  |
+| Matching                  | Each left item                              | Full left-item points for correct target ID               |
+| Ordering                  | Whole question                              | Full points for a matching complete sequence, otherwise 0 |
+| RESPONSE                  | Manual rubric dimension within the question | Teacher enters integer dimension scores and sums them     |
+| Reading/general composite | No independent scoring unit                 | Sum children only                                         |
 
-每个叶子题满分为 1–100 的整数；多单元题每个单元分值为正整数，相加为叶子题满分。容器分值为计算字段，作业满分为全部叶子题满分之和。人工量规维度只分解该人工题的分数，不新增第二份计分。
+Each leaf has integer maximum 1–100. Multi-unit questions use positive integer unit points summing to the leaf maximum. Container scores are derived; assignment maximum is the sum of leaf maxima. Rubric dimensions divide the manual question's points without a second score allocation.
 
-编辑器默认每个评分单元 1 分，允许逐单元修改。若提供“按整题总分平均分配”，要求总分不少于单元数，以整除商为基础，余数按教师编辑时的单元顺序依次加 1，并把实际分配结果保存；打乱展示不能改变单元分值。教师可随时查看和手动调整分配。
+Default to 1 point per scoring unit, editable individually. If “distribute total points evenly” is offered, total must be at least the unit count. Use the integer quotient, adding 1 from the remainder to units in teacher-edit order, and persist actual allocations. Shuffled display must not change points. Teachers can inspect and adjust them anytime.
 
-服务端从冻结的题目配置与答案键计算得分，不接受客户端提交的 score、maxScore、correct 或 gradingStatus。保留原始文本输入用于教师核查，规范化结果只用于填空匹配。
+The server scores frozen configuration/answer keys, rejecting client score, maxScore, correct, and gradingStatus. Retain original text for teacher review; normalized values are only for blank matching.
 
-### 7.2 人工批改流程
+### 7.2 Manual grading workflow
 
-提交与批改是不同流程。作业状态不因出现人工题而增加“待批改”状态，待批改属于每份学生提交。
+Submission and grading are separate workflows. Manual questions do not add a pending-review assignment state; pending review belongs to each student submission.
 
-| 提交结果状态   | 条件                                 | 学生展示                                       | 是否计入最终平均分 |
-| -------------- | ------------------------------------ | ---------------------------------------------- | ------------------ |
-| PENDING_REVIEW | 至少一个 RESPONSE 题尚未发布最终评分 | 已提交，待教师批改；可显示明确标注的客观题分数 | 否                 |
-| GRADED         | 全部叶子题已有最终评分               | 最终总分、满分、批改时间与教师评语             | 是                 |
+| Submission result state | Condition                                           | Student display                                                                   | Included in final average |
+| ----------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------- |
+| PENDING_REVIEW          | At least one RESPONSE lacks published final grading | Submitted, awaiting teacher review; clearly labeled objective subtotal may appear | No                        |
+| GRADED                  | Every leaf has a final score                        | Final total, maximum, grading time, teacher comments                              | Yes                       |
 
-纯客观题作业提交后立即为 GRADED。含人工题时，客观题先自动判分，RESPONSE 题分数为 null，不能当作 0 分；最终总分为 null。学生可见客观题分数需显示“客观题 X/Y，最终成绩待批改”，Y 仅为客观题满分。全部为人工题时 objectiveScore 与 objectiveMaxScore 均为 0，界面只显示待批改，不展示 0/0 或计算客观题百分比。
+Objective-only assignments become GRADED immediately on submission. With manual questions, objective scores are automatic, RESPONSE scores are null rather than 0, and final total is null. Any student-visible objective subtotal says “Objective X/Y; final grade pending,” with Y covering objectives only. For manual-only assignments objectiveScore and objectiveMaxScore are both 0; show pending review without 0/0 or an objective percentage.
 
-教师在待批改列表打开学生提交，查看原答案与附件，逐维度填写 0 到维度满分的整数，填写题目评语。支持保存批改草稿，不立即将草稿得分和评语展示给学生。所有人工题填写完整后，执行“发布最终成绩”，在同一事务中形成各题最终分、作业总分、批改时间与状态。
+Teachers open a pending submission, view original answers/attachments, enter integer dimension scores from 0 to each maximum, and add question comments. Grading drafts can be saved without showing draft scores/comments to students. When every manual question is complete, “Publish final grade” atomically records final question scores, assignment total, grading time, and status.
 
-教师可以调整已发布人工评分，但必须填写修改原因，使用 gradingVersion 检测并发冲突，保存审计记录，并再次发布完整最终成绩。新版本发布前旧版本成绩继续有效；不能把已发布成绩临时变为零分或让统计读取半份更新。客观题自动分在本版不提供手动覆盖，发现标准答案错误应记录问题并通过新的作业处理，不修改已发布题目。
+Teachers can revise published manual scores with a required reason, gradingVersion conflict detection, audit history, and publication of another complete final grade. The previous version remains effective until replacement publication. Do not temporarily turn published grades to zero or expose partial updates in statistics. Manual overrides of objective scores are excluded; wrong answer keys require recording the issue and using a new assignment, without editing published questions.
 
-批改可以在作业截止后进行，也可批改已移除学生的历史提交。学生没有重新提交权限。文件正常保留期间不得因等待批改而过期。教师网络失败时保留批改输入；相同发布 requestId、相同内容重试不重复生成成绩版本或审计事件。
+Grading is allowed after deadlines and for removed students' historical submissions. Students cannot resubmit. Normally retained files must not expire while awaiting grading. Preserve teacher input after network failures. Retrying the same publication requestId/content must not create duplicate grade versions or audit events.
 
-### 7.3 统计口径
+### 7.3 Statistical definitions
 
-教师报告保留发布名单总数与“已提交／未提交”，新增“待批改／已批改”。待批改仍算已提交；未提交不算零分提交。
+Teacher reports retain publication-recipient totals and submitted/not-submitted counts, adding pending/graded counts. Pending review counts as submitted; missing submissions are not zero-score submissions.
 
-`averagePercent = 已批改提交的 (最终分 / 该提交满分 × 100) 的算术平均值`，最终四舍五入到 1 位小数。没有已批改提交时为 null，显示“暂无已批改成绩”。纯客观题作业因提交后立即已批改，平均分口径与旧版一致。
+`averagePercent = arithmetic mean of (final score / submission maximum × 100) for graded submissions`, rounded to 1 decimal place. With no graded submissions, return null and display “No graded results yet.” Objective-only averages retain old semantics because submissions are immediately graded.
 
-学生、教师明细及统计读取同一已发布成绩版本。统计接口保留 `enrolled` 和 `submitted`，新增 `pendingReviewCount`、`gradedCount`，并满足后两者之和等于 `submitted`。移除学生不改变发布名单分母，已批改历史成绩仍计入该作业统计。
+Student details, teacher details, and statistics read the same published grade version. Retain `enrolled` and `submitted`; add `pendingReviewCount` and `gradedCount`, whose sum equals `submitted`. Removal does not change the recipient denominator; historical graded results remain included.
 
-教师题目分析：单选与排序以整题正确率统计；填空、完形、分组、连线以评分单元正确率统计；人工题展示已批改数量和平均得分，不伪装成自动正确率。分母只包含实际提交了该单元的提交，首版因所有叶子题必答，等于该作业已提交数。无人提交时正确率为 null。
+Teacher question analysis uses whole-question accuracy for single choice/ordering, unit accuracy for blanks/cloze/grouping/matching, and graded count/average for manual questions rather than presenting automatic accuracy. The denominator includes submissions that actually answered the unit; since all leaves are required initially, this equals the assignment's submitted count. Accuracy is null with no submissions.
 
-### 7.4 教学反馈可见性
+### 7.4 Teaching feedback visibility
 
-学生始终不接收正确答案、答案变体、关系映射、标准序列、解析、量规参考答案或音频转写。首版学生结果展示自己的答案、客观题汇总得分、最终总分及已发布教师评语，不新增逐评分单元对错提示。教师可查看逐单元判分用于教学诊断。
+Students never receive answer keys, accepted variants, relationship maps, correct sequences, explanations, rubric reference answers, or transcripts. Initial results show own answers, objective aggregate score, final total, and published teacher comments, without new per-unit correctness indicators. Teachers may inspect unit-level grading for diagnosis.
 
-教师评语按发布意图向本人展示；如果评语包含答案，属于教师明确发布的反馈内容，不应通过未发布草稿提前暴露。以后如开放标准答案，需要另立反馈时机需求，不能在本版学生对象里附带 answerKey 然后仅用 CSS 隐藏。
+Teacher comments are visible to their intended student after publication. Answers included in comments are deliberate teacher feedback and must not leak through unpublished drafts. Future answer-key release needs a separate timing policy; do not include answerKey in student objects and hide it with CSS.
 
-## 8 数据与契约
+## 8 Data and contracts
 
-### 8.1 通用内容模型
+### 8.1 Shared content model
 
-采用受控 JSON 内容树，不存储或渲染任意 HTML。首版块类型为段落、有限层级标题、列表、图片、音频；文本支持加粗和斜体。行内空位 token 仅允许出现在填空与完形题干中。纯文本输入迁移为段落节点。内容位置使用稳定 contentNodeId，便于上传上下文验证、草稿引用、删除与错误定位；这些 ID 不携带答案信息。
+Use a controlled JSON content tree, never arbitrary stored/rendered HTML. Initial blocks are paragraphs, headings with limited levels, lists, images, and audio; text supports bold/italic. Inline blank tokens are allowed only in fill-in-the-blank/cloze prompts. Migrate plain text to paragraph nodes. Stable contentNodeId values support upload-context validation, draft references, deletion, and error navigation without encoding answers.
 
-媒体节点存储 assetId、公开说明和替代文本，不存二进制、存储路径或永久 URL。教师可见转写、解析、标准答案放在教师专用字段中，不放在公共内容节点。渲染器只接受白名单节点和属性，拒绝脚本、事件属性、外链文件及未定义标签。
+Media nodes store assetId, public captions, and alt text, not binaries, storage paths, or permanent URLs. Teacher transcripts, explanations, and answer keys belong in teacher-only fields, outside public nodes. Renderers accept allowlisted nodes/properties only, rejecting scripts, event attributes, external-file links, and undefined tags.
 
-### 8.2 主要实体
+### 8.2 Main entities
 
-以下是实现必须表达的领域信息，具体 SQL 表拆分与 JSONB 使用方式可在技术设计中确定。
+These are required domain concepts; technical design may choose exact SQL table splits and JSONB usage.
 
-| 实体            | 必须表达的信息                                                                                                                           | 约束                                                             |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Assignment      | 现有字段、schemaVersion、草稿 version、发布内容标识                                                                                      | 已发布内容不可变；存储状态仍 DRAFT／PUBLISHED                    |
-| Question        | id、assignmentId、parentId、position、type、containerKind、prompt、answerAreaContent、公开 config、points                                | parentId 只指向本作业容器；容器 points 由子题推导                |
-| AnswerKey       | questionId、题型专用答案、分值分配、匹配策略、量规参考答案、解析                                                                         | 教师或服务端专用，学生序列化不得包含                             |
-| Asset           | id、ownerId、assignmentId、questionId 或共享材料上下文、purpose、状态、存储键、真实类型、大小、时长／宽高、校验值、派生文件、时间        | ID 不代表访问授权；ANSWER 必须绑定具体叶子题与学生               |
-| AssetReference  | assetId、引用实体、位置、用途及保留状态                                                                                                  | 发布／提交绑定与清理协调；允许同一教学资产多处引用               |
-| Submission      | 现有提交身份字段、requestId、requestHash、发布内容标识、答案快照、gradingStatus、objectiveScore、objectiveMaxScore、最终 score、maxScore | assignment＋student 唯一；最终 score 允许 null，人工未判分不填 0 |
-| AnswerResult    | submissionId、questionId、原始 answerPayload、单元结果、自动得分或人工得分                                                               | 叶子题唯一；答案不可由批改覆盖                                   |
-| GradingRevision | submissionId、gradingVersion、评分草稿或发布快照、教师、原因、requestId、时间                                                            | 审计与已发布成绩不可丢失；版本冲突 409                           |
+| Entity          | Required information                                                                                                                                                     | Constraints                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Assignment      | Existing fields, schemaVersion, draft version, published-content identity                                                                                                | Published content immutable; stored state remains DRAFT/PUBLISHED                                    |
+| Question        | id, assignmentId, parentId, position, type, containerKind, prompt, answerAreaContent, public config, points                                                              | parentId points only to this assignment's container; container points derived from children          |
+| AnswerKey       | questionId, type-specific answers, point allocation, matching policies, rubric references, explanations                                                                  | Teacher/server only; excluded from student serialization                                             |
+| Asset           | id, ownerId, assignmentId, questionId or shared-material context, purpose, state, storage key, actual type, size, duration/dimensions, checksum, derivatives, timestamps | ID grants no access; ANSWER binds to a specific leaf/student                                         |
+| AssetReference  | assetId, referencing entity, location, purpose, retention state                                                                                                          | Coordinate publication/submission binding with cleanup; teaching assets may have multiple references |
+| Submission      | Existing identity fields, requestId, requestHash, published-content identity, answer snapshot, gradingStatus, objectiveScore, objectiveMaxScore, final score, maxScore   | Unique assignment+student; final score nullable, never 0 merely because manual grading is pending    |
+| AnswerResult    | submissionId, questionId, original answerPayload, unit results, automatic/manual score                                                                                   | Unique per leaf; grading cannot overwrite answers                                                    |
+| GradingRevision | submissionId, gradingVersion, grading draft/published snapshot, teacher, reason, requestId, time                                                                         | Preserve audit/published history; version conflict returns 409                                       |
 
-Question 的公共 config 只包含学生需要的选项、卡片、类别、空位 ID、连线模式、上传要求及人工题公开量规维度。量规维度使用稳定 rubricDimensionId，公开其名称、描述和满分，人工批改按该 ID 提交得分。正确关系、可接受答案、正确序列和答案解释都属于 AnswerKey。排序卡片公共存储顺序与正确序列分离，不能让内部编辑顺序泄露正确答案。
+Question public config contains only student-needed options, cards, categories, blank IDs, matching mode, upload requirements, and public manual-rubric dimensions. Stable rubricDimensionId values identify public names/descriptions/maxima and submitted dimension scores. Correct relationships, accepted answers, correct sequences, and explanations belong in AnswerKey. Public ordering-card order is separate from correct sequences; internal edit order must not disclose answers.
 
-评分单元 ID 使用 blankId 或 itemId，与所属 questionId 联合校验。ID 使用项目已有 UUID 格式及规范化规则。客户端为新题和项目生成 ID，服务端验证唯一性与上下文；草稿更新保持已有 ID，新建、复制或实际替换内容才使用新 ID。
+Scoring units use blankId or itemId, validated together with questionId. IDs use existing UUID formats/normalization. Clients generate IDs for new questions/items; servers validate uniqueness/context. Draft updates preserve IDs; creation, duplication, or actual content replacement uses new IDs.
 
-### 8.3 答案载荷
+### 8.3 Answer payloads
 
-新版本答案统一使用 `{ questionId, type, payload, evidenceAssetIds }`，type 必须与发布题型一致。`evidenceAssetIds` 默认空数组，仅用于客观题可选证据。RESPONSE 的正式附件写入 payload.assetIds，不重复写入证据数组。
+New answers use `{ questionId, type, payload, evidenceAssetIds }`; type must match the published type. `evidenceAssetIds` defaults to an empty array and is only for optional objective evidence. RESPONSE attachments go in payload.assetIds, without duplication in evidence.
 
-| 题型          | payload                                      | 服务端约束                                                       |
-| ------------- | -------------------------------------------- | ---------------------------------------------------------------- |
-| SINGLE_CHOICE | `{ optionId }`                               | 恰好一个存在的选项                                               |
-| FILL_BLANK    | `{ blanks: [{ blankId, text }] }`            | 全部空各出现一次，原始 text 保留                                 |
-| CLOZE_CHOICE  | `{ blanks: [{ blankId, optionId }] }`        | 每空选择该空自己的合法选项                                       |
-| GROUPING      | `{ placements: [{ itemId, groupId }] }`      | 全部项各出现一次，类别存在                                       |
-| MATCHING      | `{ pairs: [{ leftId, rightId }] }`           | 全部左项各出现一次，目标存在，符合连线模式                       |
-| ORDERING      | `{ orderedItemIds: [...], confirmed: true }` | 恰好包含全部卡片，无重复；confirmed 为兼容字段，由客户端自动填写 |
-| RESPONSE      | `{ text, assetIds: [...] }`                  | 符合启用方式、必需项、数量和大小要求，至少有一种有效输入         |
-| COMPOSITE     | 不提交                                       | 拒绝容器答案                                                     |
+| Type          | payload                                      | Server constraints                                                                             |
+| ------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| SINGLE_CHOICE | `{ optionId }`                               | Exactly one existing option                                                                    |
+| FILL_BLANK    | `{ blanks: [{ blankId, text }] }`            | Every blank once; preserve original text                                                       |
+| CLOZE_CHOICE  | `{ blanks: [{ blankId, optionId }] }`        | Each blank selects its own valid option                                                        |
+| GROUPING      | `{ placements: [{ itemId, groupId }] }`      | Every item once; category exists                                                               |
+| MATCHING      | `{ pairs: [{ leftId, rightId }] }`           | Every left item once; target exists; mode respected                                            |
+| ORDERING      | `{ orderedItemIds: [...], confirmed: true }` | Every card exactly once; confirmed is a compatibility field populated automatically by clients |
+| RESPONSE      | `{ text, assetIds: [...] }`                  | Enabled methods, required inputs, count/size limits; at least one valid input                  |
+| COMPOSITE     | No answer submitted                          | Reject container answers                                                                       |
 
-提交整体携带 schemaVersion、publishedVersion 和 requestId。下面是一个单选答案与音频人工答案的载荷示例；所有 UUID 均为示例，真实调用须使用当前已发布对象的 ID。
+The submission includes schemaVersion, publishedVersion, and requestId. Example with one single-choice answer and one manual audio response; UUIDs are illustrative, and actual calls must use current published IDs.
 
 ```json
 {
@@ -467,209 +467,209 @@ Question 的公共 config 只包含学生需要的选项、卡片、类别、空
 }
 ```
 
-该作业假设只有以上两个叶子题，第二题已配置为必须上传 1 条音频、无需文本，且对应资源属于本学生和本题、已 READY。示例中的 publishedVersion 指发布时被冻结的作业版本，不指后续批改版本。
+This assumes the assignment has only these two leaves. The second requires 1 audio and no text, and the READY resource belongs to this student/question. publishedVersion is the frozen assignment version at publication, not a subsequent grading version.
 
-### 8.4 提交事务与幂等
+### 8.4 Submission transactions and idempotency
 
-保留 `(assignmentId, studentId)` 及 `(studentId, requestId)` 唯一约束。服务端根据发布内容、答案和资源引用生成规范化请求哈希：
+Retain unique constraints on `(assignmentId, studentId)` and `(studentId, requestId)`. The server hashes a canonical request from published content, answers, and resource references:
 
-- UUID 先规范化，answers 按 questionId 排序；填空与完形按 blankId 排序，分组按 itemId 排序，连线按 leftId 排序。
-- 附件和证据数组在本版按集合处理，拒绝重复后按 assetId 排序；学生描述的附件展示顺序不参与本版语义。
-- 排序题 orderedItemIds 保持原有顺序，不能排序后哈希。
-- 文本按原始载荷保留，不将评分时的规范化视为幂等等价。例如改了空格或大小写的答案需使用新 requestId，不能覆盖原请求。
-- 哈希包含 assignmentId、schemaVersion、publishedVersion、题型及完整语义答案，不包含短期 URL 或客户端生成的显示编号。
+- Normalize UUIDs, sort answers by questionId, blanks/cloze by blankId, grouping by itemId, and matching by leftId.
+- Attachment/evidence arrays are sets initially: reject duplicates, then sort by assetId. Student-described attachment display order is not part of this version's semantics.
+- Preserve orderedItemIds order; never sort it before hashing.
+- Preserve raw text; grading normalization does not establish idempotent equivalence. Changing whitespace/case requires a new requestId and cannot overwrite the original request.
+- Include assignmentId, schemaVersion, publishedVersion, types, and complete semantic answers; exclude short-lived URLs and client display numbers.
 
-相同 requestId、相同规范化载荷返回同一提交；相同 requestId 不同载荷返回 409。答案实际改变后生成新 requestId，但如果已经存在最终提交，新 requestId 也不能再次提交。
+Same requestId/canonical payload returns the same submission; a different payload returns 409. Changed answers get a new requestId, but an existing final submission still prevents another attempt.
 
-新提交必须先完成全部权限、结构、资源与判分检查，再在一个事务中落库答案快照、资源绑定和客观结果。以数据库写入时的时间判断截止：`clock_timestamp() < dueAt` 才接受；等于截止时间也拒绝。上传在截止前开始但处理或提交在截止后完成，不能迟交。
+Before persistence, new submissions must pass all permission, structure, resource, and grading checks. One transaction saves answer snapshots, asset bindings, and objective results. Use database write time: accept only `clock_timestamp() < dueAt`; equality is rejected. Upload beginning before the deadline does not allow submission if processing or submission completes afterward.
 
-已有成功提交的精确重试，即使过了截止时间仍返回原提交，但必须仍有访问权限。重试返回当前已发布的成绩状态与版本，不重复判分或绑定资源；人工批改后分数可能更新，提交 ID 与学生原答案不变。
+Exact retries of successful submissions return the original submission after the deadline if access remains valid. Return the current published grade state/version without regrading or rebinding. Manual grading may change scores, but submission identity/original answers remain unchanged.
 
-提交与移除成员、资源删除／清理的并发必须有明确锁或等效一致性机制。资源绑定失败导致整份提交回滚，不能只保存客观部分。继续以数据库约束而不是按钮禁用防止重复提交。
+Submission races with member removal/resource deletion/cleanup need explicit locks or equivalent consistency. Failed asset binding rolls back the entire submission, rather than saving only objectives. Database constraints, beyond disabled buttons, prevent duplicates.
 
-## 9 接口需求
+## 9 API requirements
 
-接口表是目标契约，不是现有 API 清单。沿用 `/api`、现有身份认证及统一错误形状，在 errors 中可新增稳定 code 和字段路径，方便前端定位题目及空位。版本化方案采用同一路径显式 schemaVersion；旧载荷兼容细则见第 10 节。
+This table is the target contract, not the existing endpoint inventory. Retain `/api`, current authentication, and the unified error shape. Errors may add stable codes/field paths for navigating to questions/blanks. Versioning uses explicit schemaVersion on the same paths; section 10 defines legacy compatibility.
 
-| 方法与路径                                      | 输入与结果                                                                             | 关键约束                                                 |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| POST /assignments                               | schemaVersion 2 的草稿内容 → 草稿详情                                                  | 允许未完成题目或零题；基本信息与结构合法                 |
-| PATCH /assignments/:id                          | 完整草稿、version → 最新草稿                                                           | 原子更新、保持稳定 ID、409 版本冲突                      |
-| GET /assignments/:id                            | 教师编辑投影或学生公开投影                                                             | 服务端按角色生成；学生只读自己成绩                       |
-| POST /assignments/:id/validate                  | 当前服务端草稿及预期 version → 校验结果列表                                            | 每条错误含 questionId、字段位置、原因；不发布            |
-| POST /assignments/:id/publish                   | 预期 version → 冻结后的详情                                                            | 必须重新全量校验，不能只信任此前 validate                |
-| POST /assets/uploads                            | assignmentId、叶子题或教学内容上下文、purpose、文件声明 → uploadId／assetId 与上传入口 | 先鉴权并预占额度，学生题型须允许对应上传                 |
-| POST /assets/uploads/:uploadId/content          | 有界 multipart 文件流 → PROCESSING 状态                                                | 首版 API 接收文件，不将二进制放入题目 JSON               |
-| GET /assets/:assetId                            | 资源状态、安全展示元数据与派生文件信息                                                 | 每次检查上下文权限，失败返回可理解原因                   |
-| GET 或 HEAD /assets/:assetId/content            | 显示文件；教师显式请求 original 可获取原始文件                                         | 所有变体均鉴权，音频支持 Range，无公开重定向             |
-| DELETE /assets/:assetId                         | 取消上传或移除可删除未绑定资源 → 删除／取消状态                                        | 已发布或已提交有效引用不能删除；草稿引用通过草稿更新移除 |
-| POST /assignments/:id/submissions               | 新答案联合类型与 requestId → 提交和判分状态                                            | 原子、截止、一次提交、精确重试                           |
-| GET /assignments/:id/submissions/:submissionId  | 提交详情、本人或教师可见结果                                                           | 学生仅本人且仍有访问权；教师可看答案及资源               |
-| PATCH /submissions/:submissionId/grading        | gradingVersion、人工评分与评语 → 批改草稿                                              | 教师所有者；分值范围、量规维度全校验                     |
-| POST /submissions/:submissionId/grading/publish | gradingVersion、requestId、修改原因 → 已发布成绩                                       | 完整批改才发布；重试幂等；调整成绩原因必填               |
-| GET /assignments/:id/stats                      | 原统计加 pendingReviewCount、gradedCount                                               | 最终平均分只计已批改                                     |
-| GET /assignments/:id/submissions                | 原名单加批改状态，可按状态过滤                                                         | 分母仍为发布快照，保留 removed 标记                      |
-| GET /assignments/:id/question-stats             | 教师逐题和逐评分单元分析                                                               | 不向学生暴露答案或其他学生数据                           |
+| Method and path                                 | Input and result                                                                                                 | Key constraints                                                                                      |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| POST /assignments                               | schemaVersion 2 draft → draft details                                                                            | Incomplete/zero questions allowed; valid basic information/structure                                 |
+| PATCH /assignments/:id                          | Complete draft, version → latest draft                                                                           | Atomic updates, stable IDs, 409 version conflicts                                                    |
+| GET /assignments/:id                            | Teacher edit or student public projection                                                                        | Generated by server role; students read own grades only                                              |
+| POST /assignments/:id/validate                  | Current server draft and expected version → validation list                                                      | Each error includes questionId, field location, reason; no publication                               |
+| POST /assignments/:id/publish                   | Expected version → frozen details                                                                                | Repeat full validation, never trust prior validate alone                                             |
+| POST /assets/uploads                            | assignmentId, leaf/teaching-content context, purpose, file declaration → uploadId/assetId and upload entry point | Authorize/reserve quota first; student type must allow upload                                        |
+| POST /assets/uploads/:uploadId/content          | Bounded multipart stream → PROCESSING                                                                            | First-version API receives files; no binaries in question JSON                                       |
+| GET /assets/:assetId                            | State, safe display metadata, derivatives                                                                        | Context authorization every time; understandable failure reasons                                     |
+| GET or HEAD /assets/:assetId/content            | Display file; teachers explicitly request original for originals                                                 | All variants authorized; audio Range support; no public redirects                                    |
+| DELETE /assets/:assetId                         | Cancel upload or remove deletable unbound asset → deleted/canceled state                                         | No deletion with valid published/submitted references; remove draft references through draft updates |
+| POST /assignments/:id/submissions               | New answer union and requestId → submission/grading state                                                        | Atomic, deadline-aware, one submission, exact retries                                                |
+| GET /assignments/:id/submissions/:submissionId  | Details and student/teacher-visible results                                                                      | Students: own submission with active access; teachers: answers/resources                             |
+| PATCH /submissions/:submissionId/grading        | gradingVersion, manual scores/comments → grading draft                                                           | Teacher owner; full score/rubric validation                                                          |
+| POST /submissions/:submissionId/grading/publish | gradingVersion, requestId, revision reason → published grade                                                     | Complete grading required; idempotent retries; reasons required for revisions                        |
+| GET /assignments/:id/stats                      | Existing statistics plus pendingReviewCount, gradedCount                                                         | Final averages include graded only                                                                   |
+| GET /assignments/:id/submissions                | Existing list plus grading state/filter                                                                          | Publication-snapshot denominator; retain removed marker                                              |
+| GET /assignments/:id/question-stats             | Teacher question/unit analysis                                                                                   | No answer or other-student data exposed to students                                                  |
 
-资源初始化重试使用独立的 uploadRequestId：同一账号、同一请求标识与声明返回同一上传任务，不重复预占额度。文件上传错误只影响该资源，页面保留其他题目与文件。失败后更换文件声明使用新的 uploadRequestId。服务端不能把用户声明的大小或类型当作最终结算值。
+Upload initialization retries use a separate uploadRequestId. Same account/request ID/declaration returns the same task without duplicate quota reservations. Upload failures affect only that asset, preserving other questions/files. A changed file declaration after failure uses a new uploadRequestId. Declared size/type is not the final accounting value.
 
-批改草稿同样受 gradingVersion 保护；发布 requestId 相同、内容相同返回既有发布版本，内容不同返回 409。学生提交 requestId、上传 requestId 与批改发布 requestId 属于不同作用域，不混用。
+Grading drafts also use gradingVersion. Same publication requestId/content returns the existing published version; different content returns 409. Student submission, upload, and grading-publication request IDs have separate scopes and are not interchangeable.
 
-错误至少覆盖：400 输入或引用错误、401 登录失效、403 角色／Origin 不允许、404 不存在或无对象访问权、409 内容版本／截止／已提交／资源状态冲突、413 字节超限、415 不支持类型、422 文件损坏或解码后规格不符、429 限流、500／503 服务暂不可用。预期上传失败不能把内部路径或处理堆栈发给学生。
+Errors cover at least: 400 invalid input/reference, 401 expired authentication, 403 forbidden role/Origin, 404 missing/inaccessible object, 409 content-version/deadline/already-submitted/resource-state conflicts, 413 excessive bytes, 415 unsupported type, 422 corruption/decoded-specification mismatch, 429 rate limit, and 500/503 temporary service failure. Expected upload failures must not expose internal paths or processing stacks to students.
 
-题目 JSON 请求上限与文件流分开。现有 512 KiB JSON 上限不能未经测量直接沿用。本版题目／提交 JSON 拟定上限 2 MiB，前端保存前按 UTF-8 字节计算，服务端及代理均执行上限；媒体文件有独立流式限制。达到文本单项上限不代表可以越过整份请求上限，界面必须说明剩余容量。
+Question JSON and file streams have separate limits. Do not reuse the existing 512 KiB JSON limit without measurement. The proposed question/submission JSON limit is 2 MiB, checked as UTF-8 bytes before frontend saves and enforced by server/proxy. Media has separate streaming limits. Per-field text limits do not override whole-request limits; show remaining capacity.
 
-## 10 历史数据与兼容
+## 10 Historical data and compatibility
 
-数据库采用追加迁移，不改写已应用迁移文件。必须在独立副本中验证以下步骤：
+Use append-only migrations, never rewriting applied files. Validate the following on an independent copy:
 
-1. 给现有题目建立 SINGLE_CHOICE 类型和内容块，保持历史 questionId、选项文字、分值、顺序、所属作业与正确答案不变。
-2. 为每个旧选项一次性生成并持久化稳定 optionId；`correctIndex` 映射到相应 optionId。后续读取不得重新生成 ID。
-3. 为旧提交的 selectedIndex 建立对应 optionId 投影或答案快照，保留原始载荷、request_hash、提交身份和历史成绩，不重新判分改写分数。
-4. 旧提交标记 GRADED，objectiveScore 等于旧 score，objectiveMaxScore 等于旧 maxScore；score 与 maxScore 原值保留。
-5. 旧作业填充内容版本标识，保留发布名单和撤权规则。已发布旧作业保持只读，不借升级开放改题。
-6. 现有 score 的 NOT NULL 及相关约束调整为允许待批改 null，同时保证 GRADED 时非空、非负且不超过满分；所有消费成绩的页面更新空值处理。
-7. 放宽旧表“必须存在单选 options／correct_index”的约束，并增加按题型约束。不能只增加 type 字段但仍让所有题必须写单选答案列。
-8. 原 API 的 schemaVersion 缺省解释为旧版。旧创建／编辑载荷只允许单选结构，映射到新模型；旧版 PATCH 因没有题目身份字段，继续采用整份替换题目并返回新 ID 的兼容行为，稳定 ID 更新保证适用于 schemaVersion 2。旧提交 selectedIndex 仅用于单选作业，按已冻结选项顺序转换，混合题型请求拒绝并提示更新客户端。
-9. 保留旧请求的哈希算法与原始 request_hash，确保旧提交精确重试仍能返回原提交。不同版本新请求均受同一一次提交约束，不产生额外机会。
-10. 发布新前端后清理或转换旧 sessionStorage 草稿：单选已答索引通过已持久化映射转换；教师旧本地 ID 不与服务器 ID 强行拼接。无法可靠转换时保留原文本供恢复，提示重新选择答案，不能静默清空工作。
+1. Give existing questions SINGLE_CHOICE types/content blocks while preserving historical questionId, option text, points, order, assignment, and correct answer.
+2. Generate/persist stable optionId values once for old options; map `correctIndex` accordingly. Never regenerate IDs on reads.
+3. Project old selectedIndex answers to optionId or create answer snapshots, retaining original payloads, request_hash, submission identity, and historical grades without regrading.
+4. Mark old submissions GRADED, with objectiveScore equal to old score and objectiveMaxScore equal to old maxScore; preserve score/maxScore.
+5. Add content-version identities to old assignments, retaining recipients/revocation. Published old assignments remain read-only; upgrades must not enable question changes.
+6. Relax existing score NOT NULL/related constraints for pending nulls, while requiring GRADED scores to be nonnull, nonnegative, and at most maximum. Update null handling on every grade-consuming page.
+7. Relax old mandatory single-choice options/correct_index constraints and add type-specific constraints. Adding type while still requiring single-choice answer columns for all questions is insufficient.
+8. Missing schemaVersion means legacy API input. Old creation/editing accepts only single-choice structure and maps it to the new model. Legacy PATCH lacks question identities, so retains full replacement/new-ID behavior; stable-ID updates apply to schemaVersion 2. Legacy selectedIndex submissions work only for single-choice assignments, mapped using frozen option order. Reject mixed-type requests with a client-upgrade message.
+9. Preserve legacy hashing and original request_hash so exact retries return original submissions. Requests across versions share one final-submission constraint, without extra attempts.
+10. After the new frontend ships, clear or convert old sessionStorage drafts. Convert selected single-choice indexes using persisted mappings; do not force old local teacher IDs onto server IDs. If reliable conversion is impossible, preserve original text for recovery and ask users to reselect answers, without silently clearing work.
 
-读取旧版 API 投影仅适用于可完整表示的纯文本单选作业；新前端读取时使用 `?schemaVersion=2`，写入时携带对应版本字段。混合题型及无法以旧字符串选项表示的媒体题目返回明确的升级提示，不能返回伪装成单选的题目或缺失叶子题的响应。旧发布请求若缺少预期 version，返回 409 和客户端升级提示；升级后的教师页面重新预览并携带版本发布，不牺牲新增发布冲突检查。本版保障历史读取与提交重试兼容，不保证旧前端完成全部新增编辑与发布流程。
+Legacy read projections apply only to fully representable plain-text single-choice assignments. The new frontend reads with `?schemaVersion=2` and writes with the version field. Mixed/media questions not representable as old string options return clear upgrade guidance, rather than fake single-choice objects or responses missing leaves. Old publication requests without expected version return 409 and upgrade guidance; upgraded teacher pages preview again and publish with a version, preserving conflict checks. This version guarantees historical reads/submission retries, not every new editing/publication workflow in old frontends.
 
-迁移验收检查旧作业数量、questionId、选项对应、成绩、已提交人数、平均分、已移除标记及幂等重试。旧版服务无法理解新题型，产生新类型数据后不允许直接回滚旧服务二进制；回滚方案需选择向前修复，或恢复完整数据库与文件备份并明确恢复点之后的数据处理。
+Migration acceptance checks old assignment counts, questionId, option mappings, grades, submitted counts, averages, removed markers, and idempotent retries. Old services cannot understand new types; once new-type data exists, do not roll back directly to old binaries. Choose a forward fix or restore complete database/file backups and define how to handle data after the recovery point.
 
-## 11 体验 可访问性与质量要求
+## 11 Experience, accessibility, and quality requirements
 
-### 11.1 移动端与替代操作
+### 11.1 Mobile and alternative operations
 
-在 375 px 宽度与 1280 px 桌面视口下完成出题、作答、上传、提交、批改。正文、输入框、媒体控件和主要按钮不得产生导致内容不可用的横向溢出；阅读材料和配对项可采用不同于桌面的合理布局。
+Support authoring, answering, uploading, submitting, and grading at 375 px and 1280 px desktop widths. Body text, inputs, media controls, and primary buttons must not overflow horizontally in ways that make content unusable. Reading/matching may use suitable layouts different from desktop.
 
-分组、连线与排序必须同时提供点击／触控替代操作和键盘操作，不能仅提供拖拽或仅用键盘替代触控拖拽。拖拽的单指替代要求参考 [W3C Dragging Movements](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html)。此处为设计约束，不据此声称产品整体符合 WCAG。
+Grouping, matching, and ordering must offer both click/touch alternatives and keyboard operation. Drag-only or keyboard-only alternatives to touch dragging are insufficient. See [W3C Dragging Movements](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html) for single-pointer alternatives. This is a design constraint, not a claim of whole-product WCAG compliance.
 
-焦点可见，控件有题号和项目名称，选择／归类／连线状态不只依赖颜色。错误提示定位到叶子题和内部评分单元。播放按钮、删除附件按钮与答题选择控件互不混淆。上传状态与连接变化提供可被辅助技术读取的反馈。
+Focus is visible; controls include question numbers/item names. Selection/grouping/matching states do not rely only on color. Errors locate leaves and internal scoring units. Playback/removal/answer controls are distinct. Upload states and connection changes provide assistive-technology-readable feedback.
 
-### 11.2 容量和文本限制
+### 11.2 Capacity and text limits
 
-| 项目                   | 首版拟定上限                                             |
-| ---------------------- | -------------------------------------------------------- |
-| 顶层题目               | 1–20，保存草稿可为 0                                     |
-| 每个容器的子题         | 1–10，未完成草稿可为 0                                   |
-| 每份作业叶子题         | 1–100，保存草稿可为 0                                    |
-| 每份作业评分单元       | 最多 200；人工题按整题计 1 个，不重复计量规维度          |
-| 每个叶子题分值         | 整数 1–100；最多 100 个叶子题，作业满分因此不超过 10,000 |
-| 叶子题干纯文本         | 最多 5,000 个字符                                        |
-| 容器共享材料纯文本     | 最多 30,000 个字符                                       |
-| 作答区说明纯文本       | 最多 2,000 个字符                                        |
-| 每个选项或卡片纯文本   | 最多 500 个字符                                          |
-| 类别名称、媒体简短标签 | 最多 100 个字符                                          |
-| 图片替代文本、媒体说明 | 最多 500 个字符                                          |
-| 教师解析或音频转写     | 每题或每条音频最多 10,000 个字符，仅教师可见             |
-| 每题批改评语、修改原因 | 分别最多 2,000、500 个字符                               |
-| 量规维度名称和描述     | 分别最多 100、1,000 个字符                               |
-| 单次 JSON              | UTF-8 编码不超过 2 MiB，且同时满足单字段限制             |
+| Area                                     | Proposed first-version limit                                                       |
+| ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| Top-level questions                      | 1–20; saved drafts may have 0                                                      |
+| Children per container                   | 1–10; incomplete drafts may have 0                                                 |
+| Leaves per assignment                    | 1–100; saved drafts may have 0                                                     |
+| Scoring units per assignment             | At most 200; manual questions count once, without counting rubric dimensions again |
+| Points per leaf                          | Integer 1–100; at most 100 leaves means assignment maximum ≤10,000                 |
+| Leaf prompt plain text                   | At most 5,000 characters                                                           |
+| Container shared-material plain text     | At most 30,000 characters                                                          |
+| Answer-area instruction plain text       | At most 2,000 characters                                                           |
+| Option/card plain text                   | At most 500 characters each                                                        |
+| Category names/media short labels        | At most 100 characters                                                             |
+| Image alt text/media captions            | At most 500 characters                                                             |
+| Teacher explanation/audio transcript     | At most 10,000 characters per question/audio; teacher-only                         |
+| Question grading comment/revision reason | At most 2,000/500 characters respectively                                          |
+| Rubric dimension name/description        | At most 100/1,000 characters respectively                                          |
+| Single JSON request                      | At most 2 MiB UTF-8, with all field limits also satisfied                          |
 
-统一以 Unicode 码点计字符长度，不能让前端按 JS UTF-16 长度、后端按另一口径分别验收。内容树中全部文本节点累计计入相应位置纯文本长度；资产数量另算。资源和答案涉及的 ID 长度由 UUID 契约限定。
+Count characters as Unicode code points consistently; frontend JS UTF-16 length cannot be judged against a different backend definition. Sum all text nodes for the location's plain-text limit; count assets separately. UUID contracts limit resource/answer ID lengths.
 
-### 11.3 性能与故障
+### 11.3 Performance and failures
 
-本次以独立本地环境验证功能与性能基线；正式上线时还应在目标部署环境复核，不能把开发机结果写成生产承诺。验收数据集为 20 个顶层题、100 个叶子题、200 个评分单元的合法混合题作业。
+Validate functionality/performance baselines in an isolated local environment for this delivery. Recheck the target environment at release; development-machine results are not production promises. The acceptance dataset is a valid mixed assignment with 20 top-level questions, 100 leaves, and 200 scoring units.
 
-- 元数据加载与首屏渲染不等待所有媒体下载；音频按用户操作加载，图片使用显示版本与按需加载。
-- 资源上传不阻塞其他题目编辑或作答；就绪前仅阻止引用该资源的发布或最终提交。
-- 服务端客观判分不下载媒体文件或同步执行转码，使用已经验证的 READY 元数据与冻结答案键。
-- 在 50 个并发客户端的独立验收环境中，元数据读取及不含文件传输的纯客观最终提交分别以 P95 不超过 1 秒作为本版拟定目标，报告记录硬件、网络、样本数和数据库条件。
-- 网络失败、会话过期、资源 404、处理失败、容量不足、版本冲突、截止时间到达均有明确错误及可恢复路径。截止或撤权后不能通过“重试”绕过规则。
-- 转码任务失败可重试并监控积压；服务重启不丢失任务状态。实现可使用数据库任务表或现有基础设施，不为本需求强制引入微服务。
+- Metadata/initial rendering must not wait for all media. Load audio on user action; use display images and on-demand loading.
+- Uploads must not block editing/answering other questions. Until READY, block only publication/final submission referencing that asset.
+- Objective grading must not download media or synchronously transcode; use validated READY metadata and frozen keys.
+- In an isolated acceptance environment with 50 concurrent clients, proposed P95 targets are ≤1 second separately for metadata reads and objective-only final submissions excluding file transfers. Record hardware, network, sample count, and database conditions.
+- Network errors, session expiry, asset 404s, processing failures, insufficient capacity, version conflicts, and deadlines have clear errors/recovery paths. Retries cannot bypass deadlines or revocation.
+- Processing failures support retries/backlog monitoring; restarts retain task states. A database job table or existing infrastructure is acceptable; microservices are not mandated.
 
-### 11.4 备份与运维
+### 11.4 Backup and operations
 
-正式环境必须同时备份数据库、文件元数据、原文件和派生文件；备份包含一致性清单，恢复后校验文件存在性与校验值。数据库恢复成功但所有音频丢失不算恢复完成。
+Production backups must include the database, file metadata, originals, and derivatives, with a consistency manifest. After restoration, verify file presence/checksums. A restored database with all audio missing is not complete recovery.
 
-监控上传成功率、处理失败率、处理积压、资源 404、存储用量及待批改数量。日志不记录密码、令牌、完整学生答案、音频转写或私有内容访问凭据；操作关联使用 requestId、uploadId 与 submissionId。评分修改审计与普通请求日志分开保存。
+Monitor upload success, processing failures/backlog, asset 404s, storage use, and pending reviews. Logs exclude passwords, tokens, complete student answers, transcripts, and private-content access credentials; correlate using requestId, uploadId, and submissionId. Store grading-change audits separately from ordinary request logs.
 
-## 12 交付阶段与依赖
+## 12 Delivery phases and dependencies
 
-所有下列阶段均属于本次范围，分阶段是为了安排依赖，不意味着可以只交付部分题型。
+Every phase below belongs to this delivery. Phases organize dependencies rather than permit partial question-type delivery.
 
-| 阶段         | 交付内容                                                              | 完成出口                                                   |
-| ------------ | --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 1 契约与兼容 | 内容块、稳定 ID、叶子／容器模型、答案联合类型、追加迁移、整数计分方案 | 旧数据和旧请求重试通过回归，新题型数据可完整保存且不能越权 |
-| 2 媒体基础   | 上传、处理、访问代理、总量控制、文件保留与清理、备份                  | 教师与学生资源全流程及撤权、并发清理测试通过               |
-| 3 客观题     | 升级单选及填空、完形、分组、连线、排序，教师与学生界面                | 各题型编辑、预览、发布、作答、判分和失败恢复通过           |
-| 4 组合与批改 | 阅读、子母题、RESPONSE、量规、批改草稿与成绩发布                      | 混合作业正确计分，待批改和最终成绩闭环通过                 |
-| 5 整体验收   | 浏览器与手机视口、容量、并发、迁移、恢复、权限及教学样例              | 第 13 节完成，接口、运维说明与发布清单同步                 |
+| Phase                     | Deliverables                                                                                             | Exit criteria                                                                         |
+| ------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| 1 Contracts/compatibility | Content blocks, stable IDs, leaf/container model, answer unions, append-only migrations, integer scoring | Legacy data/retry regressions pass; new types persist completely with authorization   |
+| 2 Media foundation        | Upload, processing, access proxy, aggregate limits, retention/cleanup, backup                            | Full teacher/student media flow, revocation, and concurrent-cleanup tests pass        |
+| 3 Objective types         | Upgrade single choice; add blanks, cloze, grouping, matching, ordering, teacher/student interfaces       | Editing, preview, publication, answering, grading, and failure recovery pass per type |
+| 4 Composites/grading      | Reading, general composites, RESPONSE, rubrics, grading drafts/publication                               | Mixed scoring and pending-to-final result workflow pass                               |
+| 5 Overall acceptance      | Browser/mobile viewports, capacity, concurrency, migration, recovery, permissions, teaching examples     | Section 13 complete; API/operations docs and release checklist synchronized           |
 
-所有必需功能优先级均为 P0；题型拖拽动画、批量操作及进一步教学分析可后续优化，但本版替代操作、上传可靠性、人工批改和数据兼容不能省略。
+All required capabilities are P0. Drag animations, bulk actions, and further teaching analysis may improve later, but alternative operations, upload reliability, manual grading, and compatibility cannot be omitted.
 
-## 13 验收用例
+## 13 Acceptance cases
 
-测试使用独立合成数据，以下预期不能只用界面按钮禁用验证，应包含服务端非法请求、数据断言和适当的真实 PostgreSQL 并发测试。按最新范围，桌面浏览器和手机视口的文件上传、图片显示、音频播放及核心操作必须通过，并记录浏览器与视口尺寸。不要求真实设备验证，也不将视口模拟描述为已验证所有移动浏览器引擎。
+Use isolated synthetic data. Expectations require more than disabled UI buttons: include invalid server requests, data assertions, and suitable real PostgreSQL concurrency tests. Under the latest scope, desktop/mobile-viewport uploads, image display, audio playback, and core operations must pass, recording browser/viewport dimensions. Physical devices are not required; viewport emulation is not verification of every mobile engine.
 
-| 编号 | 场景                                                       | 预期结果                                                                                                                      |
-| ---- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| AC01 | 单选项改为图片或音频，选项重排后提交                       | 媒体正常显示，正确答案按稳定 ID 判分；播放不误选                                                                              |
-| AC02 | 填空标准答案 London，提交含首尾空格的 `london`             | 默认得分；开启大小写敏感后不匹配；两种结果均由服务端产生                                                                      |
-| AC03 | `its`／`it's`、直撇号／弯撇号、重音字符和多空白测试        | 按第 4.2 节匹配，不擅自接受拼写或标点变体                                                                                     |
-| AC04 | 两空填空分值 2、3，只答对第二空                            | 得 3/5 分；未填任一空时拒绝提交且不产生记录                                                                                   |
-| AC05 | 完形 3 空，每空 2 分，答对 2 空；提交其他空的 optionId     | 正常答案得 4/6；跨空选项被拒绝                                                                                                |
-| AC06 | 删除或复制空位，再保存并发布                               | 不残留旧答案键；复制得到新 ID；所有 token 与配置匹配                                                                          |
-| AC07 | 阅读包含 3 个子题，每题 2 分                               | 满分 6，进度分母为 3，母题无独立答案及分数                                                                                    |
-| AC08 | 母题挂子容器、跨作业子题、孤立 parentId                    | 服务端拒绝，不产生无效层级                                                                                                    |
-| AC09 | 四项分组，每项 1 分，三项正确；组内换序                    | 得 3/4，组内顺序无影响；项目重复归组被拒绝                                                                                    |
-| AC10 | 一对一连线目标已占用；多对一配置重复目标                   | 一对一不悄悄删除旧答案；多对一允许共享目标，按左项计分                                                                        |
-| AC11 | 连线右侧含干扰项，全部左项已连接                           | 允许提交，不要求干扰项也被连接                                                                                                |
-| AC12 | 排序保留初始排列；调整后交换两项                           | 页面当前完整排列可直接提交，无需确认；错误完整序列得 0                                                                        |
-| AC13 | 排序第二条可接受序列；重复或漏卡片                         | 可接受序列得满分；非法序列被服务端拒绝                                                                                        |
-| AC14 | 学生可见内容相同的排序卡片被要求区分身份                   | 无等价答案配置时不能发布，并提示改写题目                                                                                      |
-| AC15 | 教师保存题干或答案未完成的草稿，随后发布                   | 草稿保留不完整内容；发布返回精确位置错误且学生看不到草稿                                                                      |
-| AC16 | 同一教师两个编辑标签页保存并发布不同版本                   | 后保存／发布请求 409，保留本地工作，不发布未经当前预览的改动                                                                  |
-| AC17 | 发布后改题干、替换音频、改答案或改分                       | 全部拒绝，历史题目内容和总分不变                                                                                              |
-| AC18 | 上传最大边界文件与超限 1 字节文件                          | 边界文件在其他规格合法时可用；超限 413，额度不泄漏                                                                            |
-| AC19 | 伪造 MIME、文件后缀、损坏图片、超像素图片、M4A 非支持编码  | 不进入 READY，返回类型或解码错误，不仅靠浏览器校验                                                                            |
-| AC20 | 音频 10 分钟与超过 10 分钟；暂停、跳转与倍速               | 边界音频可用，超时长拒绝；目标设备可播放，限制有明确提示                                                                      |
-| AC21 | 上传失败重试、处理失败、刷新、取消后迟到的处理结果         | 其他工作保留；恢复正确状态；取消资源不被复活                                                                                  |
-| AC22 | 他人 assetId、其他题答案附件、原文件／显示文件／Range 越权 | 全部拒绝；学生不能读取其他学生答案或教学原文件变体                                                                            |
-| AC23 | 移除学生后用旧内容地址读取媒体或提交                       | 新请求失败，教师仍能读取并批改历史提交                                                                                        |
-| AC24 | 两个并发上传合计超临时工作区额度；另测提交引用超最终总量   | 并发预占不超过工作区上限，失败释放额度；最终引用超限拒绝，工作区额度不增加最终提交上限                                        |
-| AC25 | 删除附件引用后撤销；同一资源还有其他引用                   | 宽限期内正确恢复；有引用的底层文件不被删除                                                                                    |
-| AC26 | 清理任务与最终提交或发布同时绑定资源                       | 成功提交的资源完整保留，或整份操作明确失败，不出现悬空引用                                                                    |
-| AC27 | RESPONSE 必须 1 条音频，只有文本或只有 PROCESSING 文件     | 拒绝提交；READY 本人音频符合要求才可提交                                                                                      |
-| AC28 | 客观题开启可选照片，错误选项加正确手写照片                 | 按选项得 0，附件保留为证据，不擅自改为人工题                                                                                  |
-| AC29 | 6 分客观题正确，4 分人工题尚未批改；另测纯人工题作业       | 混合作业 objectiveScore=6、objectiveMaxScore=6、score=null、maxScore=10、PENDING_REVIEW，不进入最终平均分；纯人工题不显示 0/0 |
-| AC30 | 上例人工题发布 3 分；再调整为 4 分                         | 首次最终 9/10，调整后 10/10；保留历史版本和原因，学生读到一致的新成绩                                                         |
-| AC31 | 人工量规漏维度、负分、超维度满分、保存批改草稿             | 非法值拒绝；草稿不改变学生最终成绩或已发布评语                                                                                |
-| AC32 | 同一人工评分发布并发或网络超时重试                         | 版本冲突可恢复；精确重试不重复发布成绩或审计事件                                                                              |
-| AC33 | 一人 9/10 已批改、一人待批改、一人未提交                   | submitted=2、pendingReview=1、graded=1、名单=3、平均分=90.0，未提交不当 0 分                                                  |
-| AC34 | 全部学生待批改或无人提交                                   | averagePercent=null，不显示 0；两种状态的提交数正确区别                                                                       |
-| AC35 | 提交答案缺题、多题、母题答案、跨题 ID、客户端分数          | 服务端拒绝，提交与答案资源绑定均无部分写入                                                                                    |
-| AC36 | 同一 requestId 重排答案／映射／附件集合后重试              | 返回同一提交；排序卡片换序或文本改变后用旧 requestId 返回 409                                                                 |
-| AC37 | 两个不同 requestId 同时最终提交，或同请求并发              | 真实 PostgreSQL 中最多一份最终提交，结果可读取且资源不重复绑定                                                                |
-| AC38 | 截止前上传、截止后提交；成功请求截止后精确重试             | 前者拒绝新提交，后者仍有权限时返回原提交                                                                                      |
-| AC39 | 全量学生响应、资源元数据和前端缓存检查                     | 无正确答案、标准序列、解析、教师转写、他人答案或未发布批改草稿                                                                |
-| AC40 | 历史单选数据升级与旧请求重试                               | 题目和成绩不变，optionId 映射稳定，重试有效，移除标记及名单正确                                                               |
-| AC41 | 超过顶层／叶子／单元／文本／资源／JSON 限制                | 前端提示具体位置和剩余额度，服务端拒绝，不依赖客户端限制                                                                      |
-| AC42 | 只用键盘、只用点击触控完成分组连线排序                     | 所有答案可完成与修改，焦点和状态可辨，无强制拖拽                                                                              |
-| AC43 | 桌面与手机视口浏览器选图、上传音频和访问代理播放           | 浏览器流程可用，320–768px 核心界面无页面横向溢出；不支持文件明确提示，不虚报真机兼容                                          |
-| AC44 | 最大合法混合作业的加载、判分和资源延迟                     | 达到约定测试环境性能目标，媒体延迟不阻塞首屏或已无关题操作                                                                    |
-| AC45 | 数据库与文件备份恢复，随机检查图片音频及历史提交           | 元数据、文件和校验值一致，原答案与成绩可访问；记录恢复点                                                                      |
+| ID   | Scenario                                                                              | Expected result                                                                                                                                 |
+| ---- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC01 | Replace a single-choice option with image/audio; reorder before submitting            | Media displays; stable IDs determine grades; playback does not accidentally select                                                              |
+| AC02 | Key London; submit `london` with surrounding spaces                                   | Scores by default; fails case-sensitive match; server determines both                                                                           |
+| AC03 | Test `its`/`it's`, straight/curly apostrophes, accents, repeated whitespace           | Section 4.2 rules; no implicit spelling/punctuation variants                                                                                    |
+| AC04 | Two blanks worth 2/3; only second correct                                             | 3/5; any missing blank rejects submission without a record                                                                                      |
+| AC05 | Three cloze blanks worth 2 each, two correct; submit another blank's optionId         | Valid answer scores 4/6; cross-blank option rejected                                                                                            |
+| AC06 | Delete/duplicate a blank, save, publish                                               | No stale key; copies have new IDs; all tokens match configuration                                                                               |
+| AC07 | Reading group with three 2-point children                                             | Maximum 6, progress denominator 3; no parent answer/score                                                                                       |
+| AC08 | Nested container, cross-assignment child, orphan parentId                             | Server rejects without invalid hierarchy                                                                                                        |
+| AC09 | Four grouping items worth 1 each, three correct; reorder within group                 | 3/4; order irrelevant; duplicate placement rejected                                                                                             |
+| AC10 | Occupied one-to-one target; repeated many-to-one target                               | No silent deletion in one-to-one; sharing allowed in many-to-one; score by left item                                                            |
+| AC11 | Right-side distractors; every left item connected                                     | Submission allowed without using distractors                                                                                                    |
+| AC12 | Keep initial ordering; then swap two items                                            | Current complete arrangement submits directly without confirmation; wrong complete sequence scores 0                                            |
+| AC13 | Second accepted ordering; duplicate/missing card                                      | Accepted sequence earns full points; server rejects invalid sequence                                                                            |
+| AC14 | Visibly identical ordering cards require hidden identity distinction                  | Publication rejected without equivalent answers; request rewrite                                                                                |
+| AC15 | Save incomplete prompt/answer draft, then publish                                     | Draft retained; publication returns exact-location errors; students cannot see draft                                                            |
+| AC16 | Same teacher saves/publishes different versions in two tabs                           | Later save/publication returns 409; retain local work; do not publish unpreviewed changes                                                       |
+| AC17 | Change published prompt, audio, key, or points                                        | All rejected; historical content/maximum unchanged                                                                                              |
+| AC18 | Upload boundary files and files 1 byte too large                                      | Boundary accepted if other specifications pass; excess returns 413 without quota leaks                                                          |
+| AC19 | Forged MIME/extensions, corrupt/oversized-pixel image, unsupported M4A codec          | Never READY; type/decoding errors enforced beyond browser validation                                                                            |
+| AC20 | Audio exactly/over 10 minutes; pause, seek, speed                                     | Boundary accepted, overlong rejected; playback on target device with clear limits                                                               |
+| AC21 | Upload retry, processing failure, refresh, late result after cancel                   | Other work retained; correct recovered states; canceled asset not revived                                                                       |
+| AC22 | Other owner's assetId, another question's answer, unauthorized original/display/Range | All rejected; students cannot read others' answers or teaching originals                                                                        |
+| AC23 | Removed student reads old media URL or submits                                        | New requests fail; teacher can still read/grade history                                                                                         |
+| AC24 | Concurrent uploads exceed temporary quota; separately exceed final-reference total    | Reservations respect workspace limit; failures release quota; excessive final references rejected; workspace quota does not enlarge final limit |
+| AC25 | Undo reference deletion; another reference remains                                    | Restore during grace period; referenced underlying files retained                                                                               |
+| AC26 | Cleanup races with final submission/publication binding                               | Successful resources remain intact or whole operation fails explicitly; no dangling references                                                  |
+| AC27 | RESPONSE requires 1 audio; text only or PROCESSING file only                          | Reject; only READY own audio satisfying requirements allows submission                                                                          |
+| AC28 | Objective optional photo: wrong option plus correct handwritten photo                 | Option scores 0; evidence retained; no implicit conversion to manual                                                                            |
+| AC29 | Correct 6-point objective and pending 4-point manual; also manual-only                | Mixed: objectiveScore=6, objectiveMaxScore=6, score=null, maxScore=10, PENDING_REVIEW, excluded from final average; manual-only shows no 0/0    |
+| AC30 | Publish manual score 3 in preceding example, then revise to 4                         | First total 9/10, then 10/10; history/reasons retained; consistent updated student result                                                       |
+| AC31 | Missing rubric dimension, negative/over-maximum score, save grading draft             | Invalid values rejected; drafts do not change student final grades/published comments                                                           |
+| AC32 | Concurrent grade publication or timeout retry                                         | Recoverable version conflict; exact retry duplicates neither grade nor audit                                                                    |
+| AC33 | One graded 9/10, one pending, one not submitted                                       | submitted=2, pendingReview=1, graded=1, recipients=3, average=90.0; missing submission is not 0                                                 |
+| AC34 | All pending or no submissions                                                         | averagePercent=null, not 0; submitted counts distinguish states                                                                                 |
+| AC35 | Missing/extra answers, parent answers, cross-question IDs, client scores              | Server rejects; no partial submission/asset bindings                                                                                            |
+| AC36 | Retry same requestId after reordering answers/maps/attachment sets                    | Same submission; changed ordering sequence/text with old requestId returns 409                                                                  |
+| AC37 | Concurrent different requestId values or identical requests                           | At most one final submission in real PostgreSQL; readable result; no duplicate bindings                                                         |
+| AC38 | Upload before/submit after deadline; exact successful retry after deadline            | New submission rejected; exact retry returns original if access remains                                                                         |
+| AC39 | Inspect complete student responses, metadata, frontend caches                         | No keys, correct sequences, explanations, teacher transcripts, others' answers, or unpublished grading                                          |
+| AC40 | Upgrade legacy single-choice data; retry old requests                                 | Questions/grades unchanged, stable optionId mapping, retries valid, removed markers/recipients correct                                          |
+| AC41 | Exceed top-level/leaf/unit/text/resource/JSON limits                                  | Frontend shows exact location/remaining capacity; server rejects independently                                                                  |
+| AC42 | Complete grouping/matching/ordering using only keyboard or only clicks/touch          | All answers editable/completable with identifiable focus/states; no mandatory dragging                                                          |
+| AC43 | Desktop/mobile-viewport image selection, audio upload, proxy playback                 | Browser flows work; no core page overflow at 320–768px; clear unsupported-file errors; no false physical-device claims                          |
+| AC44 | Maximum valid mixed-assignment loading/grading/media latency                          | Meets agreed environment targets; media latency does not block first render or unrelated questions                                              |
+| AC45 | Restore database/files; sample images/audio/historical submissions                    | Matching metadata/files/checksums; original answers/grades accessible; recovery point recorded                                                  |
 
-## 14 开发完成标准
+## 14 Definition of development completion
 
-本次功能完成必须同时具备：教师编辑与学生作答 UI、前后端共享契约、服务端校验与判分、资源处理与鉴权、人工批改和成绩统计、追加迁移与旧请求兼容、错误恢复及第 13 节测试证据。
+Completion requires teacher editing and student-answer UI, shared frontend/backend contracts, server validation/grading, media processing/authorization, manual grading/statistics, append-only migrations/legacy requests, failure recovery, and section 13 test evidence together.
 
-工程交付同步更新 API、架构、部署与备份说明。评审需确认拟定容量与文件规格是否满足实际课程、目标设备及部署条件；若需调整，在开始对应实现前形成统一版本。工期和存储成本在资源服务、现有数据量与部署环境确定后估算，本文不虚构现有运营规模或承诺交付日期。
+Update API, architecture, deployment, and backup documentation with delivery. Review whether proposed capacity/file specifications meet actual courses, target devices, and deployment conditions. Agree on changes before the corresponding implementation. Estimate time/storage costs after resource services, existing data volumes, and deployment environments are known; do not invent operating scale or delivery dates.
 
-## 15 依据与设计参考
+## 15 Basis and design references
 
-项目基线来自以下现有文件，仅用于说明升级起点；本文没有宣称新功能已完成。
+The following existing files establish the upgrade starting point; this document does not claim new features are complete.
 
-- [现有共享契约](../packages/contracts/src/index.ts)
-- [作业服务与现有判分](../apps/api/src/assignments/assignments.service.ts)
-- [教师出题界面](../apps/web/src/AssignmentForm.tsx)
-- [学生作答与成绩页面](../apps/web/src/App.tsx)
-- [同标签页工作保护](../apps/web/src/WorkProtection.tsx)
-- [初始数据库约束](../apps/api/migrations/001_initial.sql)
-- [现有 API 与兼容语义](API.md)
-- [现有业务规则与架构](ARCHITECTURE.md)
+- [Existing shared contracts](../packages/contracts/src/index.ts)
+- [Assignment service and existing grading](../apps/api/src/assignments/assignments.service.ts)
+- [Teacher authoring interface](../apps/web/src/AssignmentForm.tsx)
+- [Student answers and results](../apps/web/src/App.tsx)
+- [Same-tab work protection](../apps/web/src/WorkProtection.tsx)
+- [Initial database constraints](../apps/api/migrations/001_initial.sql)
+- [Existing API and compatibility semantics](API.md)
+- [Existing business rules and architecture](ARCHITECTURE.md)
 
-上传控制、拖拽替代及媒体分段读取分别参考第 6 节和第 11 节对应官方资料；题型、判分策略、量规、容量与界面流程是本项目的产品要求。
+Upload controls, drag alternatives, and partial media reads refer to the official materials linked in sections 6 and 11. Question types, grading policies, rubrics, capacity, and UI workflows are this project's product requirements.

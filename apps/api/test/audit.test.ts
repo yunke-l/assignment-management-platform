@@ -43,8 +43,8 @@ const assignment = (large = false) => ({
   description: '',
   dueAt: new Date(Date.now() + 86400000).toISOString(),
   questions: Array.from({ length: large ? 20 : 1 }, () => ({
-    prompt: large ? '漢'.repeat(1000) : 'Select one.',
-    options: large ? Array.from({ length: 6 }, () => '漢'.repeat(500)) : ['A', 'B'],
+    prompt: large ? '€'.repeat(1000) : 'Select one.',
+    options: large ? Array.from({ length: 6 }, () => '€'.repeat(500)) : ['A', 'B'],
     correctIndex: 0,
     points: 10,
   })),
@@ -98,7 +98,7 @@ test('the body limit accepts the largest Unicode assignment allowed by the contr
     .send(assignment(true))
     .expect(201);
   assert.equal(response.body.questions.length, 20);
-  assert.equal(response.body.questions[19].options[5], '漢'.repeat(500));
+  assert.equal(response.body.questions[19].options[5], '€'.repeat(500));
 });
 test('assignment and invitation timestamps are portable ISO timestamps', async () => {
   const response = await http

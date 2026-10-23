@@ -1,43 +1,43 @@
-# 合成数据查询测量
+# Synthetic-data query measurements
 
-这是一轮本地实测，不是生产容量或用户规模。原始机器信息、时间、HTTP 测量和完整执行计划保存在 [benchmark.json](evidence/benchmark.json)。脚本为 `scripts/benchmark.ts`。
+This is one local measurement run, not evidence of production capacity or user scale. Raw machine information, timestamps, HTTP measurements, and full execution plans are in [benchmark.json](evidence/benchmark.json). The script is `scripts/benchmark.ts`.
 
-## 环境与方法
+## Environment and method
 
-- 日期：2026-10-07；macOS ARM64，8 个逻辑 CPU，Node 24.5.0。
-- PostgreSQL 17.10：包提供的二进制自报 x86_64；宿主 Node 自报 arm64。这是本机测试环境，不能等同于生产 Linux 容器。
-- 20 个合成班级、2,000 名合成学生、2,000 份作业、200,000 条固定受众记录、100,000 条提交，另有演示种子的 2 个班级和 4 个账号。
-- 一个 API 进程，pg 连接池上限 10；每个接口先预热 5 次，再同时发起 50 个 HTTP 请求，全部成功。
-- 复用同一个 HTTP 监听端口；包括会话校验、业务 SQL 和 JSON 响应。数据库和客户端都在本机，数据已经过 ANALYZE，缓存较热。
-- 批量构造样本的事务单独放宽到 120 秒，应用查询仍使用 10 秒限制。数据库必须为空，名称以 `_bench` 结尾；脚本不会清空已有库。
-- 合成 ID 使用确定性的 RFC variant UUID v8。直接把 MD5 转成 UUID 会产生不符合 API 输入契约的版本或 variant 位；该生成问题已修正后重新测量。
+- Date: 2026-10-07; macOS ARM64, 8 logical CPUs, Node 24.5.0.
+- PostgreSQL 17.10: the packaged binary reports x86_64; the host Node reports arm64. This local test environment is not equivalent to a production Linux container.
+- 20 synthetic classes, 2,000 synthetic students, 2,000 assignments, 200,000 fixed-recipient records, and 100,000 submissions, plus 2 classes and 4 accounts from the demo seed.
+- One API process, pg pool limit 10; each endpoint receives 5 warm-up requests followed by 50 concurrent HTTP requests, all successful.
+- The same HTTP listening port is reused. Measurements include session validation, business SQL, and JSON responses. Database and client are local; data has been ANALYZEd and caches are relatively warm.
+- The sample-generation transaction alone has a relaxed 120-second limit; application queries retain the 10-second limit. The database must be empty and its name must end in `_bench`; the script does not clear existing databases.
+- Synthetic IDs use deterministic RFC-variant UUID v8 values. Converting MD5 directly to UUID can produce version or variant bits that violate API contracts; this generation issue was fixed before remeasurement.
 
-## 记录
+## Results
 
-| 接口                         | P50      | P95      | 最大     |
-| ---------------------------- | -------- | -------- | -------- |
-| 作业列表（含授权和分页）     | 38.41 ms | 52.31 ms | 52.53 ms |
-| 学生提交明细（含授权和分页） | 20.51 ms | 29.82 ms | 30.11 ms |
+| Endpoint                                                            | P50      | P95      | Maximum  |
+| ------------------------------------------------------------------- | -------- | -------- | -------- |
+| Assignment list (including authorization and pagination)            | 38.41 ms | 52.31 ms | 52.53 ms |
+| Student submission details (including authorization and pagination) | 20.51 ms | 29.82 ms | 30.11 ms |
 
-列表查询的 EXPLAIN 执行时间为 0.416 ms；报告查询为 0.195 ms。这两个数是提取的主要查询本身，不能当作完整 HTTP 延迟。
+EXPLAIN execution time was 0.416 ms for the list query and 0.195 ms for the report query. These are the extracted main queries alone, not complete HTTP latency.
 
-## 索引判断
+## Index assessment
 
-本样本中，列表只扫描 2,000 份作业；执行计划选择顺序扫描和 top-N 排序。报告按 assignment_id 命中 `assignment_recipients_pkey` 和 `submissions_assignment_id_student_id_key`，再与学生数据连接。在这一规模下没有测出需要新增索引的慢查询，因此保留现有索引，没有宣称优化前后提升。
+In this sample, the list scans only 2,000 assignments; the plan selects a sequential scan and top-N sort. Reports use `assignment_recipients_pkey` and `submissions_assignment_id_student_id_key` by assignment_id, then join student data. No slow query requiring a new index was measured at this scale, so existing indexes were retained without claiming before/after optimization gains.
 
-标题使用大小写不敏感的字面子串匹配，现有 B-tree 并不能直接优化任意子串。更大的数据规模、复杂标题搜索和跨页并发变化应重新测量，必要时再考虑 pg_trgm 或游标分页。
+Titles use case-insensitive literal substring matching; the existing B-tree cannot directly optimize arbitrary substrings. Larger data volumes, complex title searches, and concurrent changes across pages need remeasurement, with pg_trgm or cursor pagination considered if necessary.
 
-这里只采样一轮 50 请求，没有长期稳定性、冷缓存、跨网络、写入压力和真实用户分布的证据。2026-09-24 的列表 P95 为 717.67 ms，本轮为 52.31 ms；本次没有为此修改查询或索引，不能把两轮差异归因为代码优化。本轮达到开发计划中 300 ms 的示例阈值，但不能据此认定稳定容量目标已通过。主要 SQL 的独立执行计划无法定位完整 HTTP 长尾，尚需在稳定、隔离的目标环境下采集连接池等待、事件循环和多轮请求分布；不能凭单轮数据宣称线上 SLA。
+This samples only one round of 50 requests, without evidence for sustained stability, cold caches, cross-network access, write pressure, or real user distributions. List P95 was 717.67 ms on 2026-09-24 and 52.31 ms in this run. No query or index changes were made for this measurement, so the difference cannot be attributed to code optimization. This run met the development plan's example 300 ms threshold without establishing stable capacity. Isolated main-SQL execution plans cannot explain complete HTTP tail latency; connection-pool waits, event-loop behavior, and multiple request distributions still need collection in a stable, isolated target environment. A single run does not establish a production SLA.
 
 ## Multi-type workload, 2026-10-08
 
-新增多题型最大合法数量夹具的本机实测，原始记录为 [multi-type-benchmark.json](evidence/multi-type-benchmark.json)，脚本为 [benchmark-multi-type.ts](../scripts/benchmark-multi-type.ts)。测试时间为 2026-10-09T05:13:29.983Z。Node 24.5.0、macOS ARM64、8 个逻辑 CPU；PostgreSQL 17.10 自报 x86_64。一个 API 进程，pg 连接池最多 10 个连接，HTTP 客户端、数据库均在本机；读取已预热。
+A local measurement was added using a multi-type fixture at the maximum allowed counts. Raw results are in [multi-type-benchmark.json](evidence/multi-type-benchmark.json), using [benchmark-multi-type.ts](../scripts/benchmark-multi-type.ts). Test time: 2026-10-09T05:13:29.983Z. Node 24.5.0, macOS ARM64, 8 logical CPUs; PostgreSQL 17.10 reports x86_64. One API process, pg pool limit 10, local HTTP client and database, warmed reads.
 
-作业有 20 个顶层、100 个叶子、200 个评分单元，覆盖六类客观题与阅读／通用容器；公开 JSON 为 137,042 字节，答案 JSON 为 29,931 字节。数量上限合法不表示所有字段同时达到文本或 2 MiB 上限。每个接口各 50 个并发请求；提交使用独立学生、会话及 requestId，全部一次成功并由服务端给出 200/200 分。
+The assignment contains 20 top-level questions, 100 leaves, and 200 scoring units, covering six objective types and reading/general containers. Public JSON is 137,042 bytes; answer JSON is 29,931 bytes. Reaching allowed counts does not mean every field simultaneously reaches its text or 2 MiB limit. Each endpoint receives 50 concurrent requests. Submissions use separate students, sessions, and requestId values; all succeeded on the first attempt with server-calculated scores of 200/200.
 
-| 操作                 | P50       | P95       | 最大      | 本版拟定阈值   |
-| -------------------- | --------- | --------- | --------- | -------------- |
-| 已授权公开元数据读取 | 114.80 ms | 187.55 ms | 193.88 ms | P95 ≤ 1,000 ms |
-| 纯客观最终提交       | 200.87 ms | 286.80 ms | 288.48 ms | P95 ≤ 1,000 ms |
+| Operation                       | P50       | P95       | Maximum   | Proposed threshold for this version |
+| ------------------------------- | --------- | --------- | --------- | ----------------------------------- |
+| Authorized public metadata read | 114.80 ms | 187.55 ms | 193.88 ms | P95 ≤ 1,000 ms                      |
+| Objective-only final submission | 200.87 ms | 286.80 ms | 288.48 ms | P95 ≤ 1,000 ms                      |
 
-本轮满足本机阈值，不能推定目标部署环境 SLA。脚本拒绝使用非空数据库，库名必须以 `_multi_bench` 结尾；测试后隔离 PostgreSQL 实例已停止。这一轮没有媒体传输、冷缓存、跨网络、长时间压力、目标容器或真实手机的性能证据。媒体按需加载与实际播放另由浏览器测试覆盖；不能用本表代替媒体网络延迟测量。正式环境须按需求复验，并记录多轮分布和恢复点。
+This run meets the local threshold without establishing an SLA for the target deployment. The script rejects nonempty databases and requires names ending in `_multi_bench`; the isolated PostgreSQL instance was stopped afterward. The run provides no performance evidence for media transfer, cold caches, cross-network access, sustained pressure, target containers, or physical phones. Browser tests separately cover on-demand media loading and actual playback; this table does not measure media network latency. The production environment requires requirement-based revalidation, recording multiple distributions and recovery points.

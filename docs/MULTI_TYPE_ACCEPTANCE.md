@@ -1,86 +1,86 @@
-# 多题型与媒体升级：实现和验收记录
+# Multi-type and media upgrade: implementation and acceptance record
 
-本记录对应 [需求文档](MULTI_TYPE_QUESTIONS_PRD.md) 的本次开发。日期：2026-10-08（温哥华；测试证据使用 2026-10-09 UTC）。按用户最新要求，本次验收范围为浏览器功能可用及手机浏览器 UI 适配，不要求真机验证。以下证据使用桌面 Chrome 和手机视口；容器及目标部署环境检查属于后续上线工作，不阻塞本次交付，不将本地结果或旧版 CI 记录当成生产部署证据。
+This record covers the development described in the [Requirements document](MULTI_TYPE_QUESTIONS_PRD.md). Date: 2026-10-08 (Vancouver; test evidence uses 2026-10-09 UTC). Per the user's latest requirements, acceptance covers browser functionality and mobile-browser UI, without physical-device validation. Evidence below uses desktop Chrome and mobile viewports. Container and target deployment checks are follow-up release work and do not block this delivery. Local results and older CI records are not production deployment evidence.
 
-## 已实现范围
+## Implemented scope
 
-- 教师编辑、复制、排序、预览、保存不完整草稿、定位发布错误和按版本发布。支持单选、填空、完形选择、分组、连线、排序、人工作答；阅读和通用子母题采用一级容器与可作答子题。
-- 题干、作答区材料及选项支持图片、音频。学生可上传作答附件；客观题证据与人工题评分分离。附件说明提交后冻结，教学原文件和教师转写保持私有。
-- 服务端按稳定 ID 校验、客观评分、提交幂等、冻结发布内容；人工量规批改草稿、成绩发布及带原因的调整记录；统计区分待批改、已批改和未提交。
-- 流式上传、真实图片解码与音频解码转码、持久任务租约、受权访问代理、Range、账户配额、资源绑定、宽限期清理及数据库与媒体配套恢复。
-- 追加 004–006 迁移；保留历史题目与成绩，兼容旧单选请求。浏览器恢复旧草稿时保留原始副本；未改变的旧提交保留原请求 ID。
+- Teacher editing, duplication, reordering, preview, incomplete draft saves, publication-error navigation, and versioned publication. Supports single choice, fill-in-the-blank, cloze choice, grouping, matching, ordering, and manual responses; reading/general composites use one-level containers with answerable children.
+- Images/audio in prompts, answer-area materials, and options. Students can upload answer attachments; objective evidence is separated from manual scoring. Attachment captions freeze on submission; teaching originals and teacher transcripts remain private.
+- Server validation by stable IDs, objective grading, submission idempotency, frozen published content, manual rubric drafts, grade publication, and revision history with reasons. Statistics distinguish pending, graded, and not submitted.
+- Streaming uploads, real image decoding and audio decoding/transcoding, durable job leases, authorized access proxy, Range support, account quotas, resource binding, grace-period cleanup, and coordinated database/media recovery.
+- Append-only migrations 004–006 preserve historical questions/grades and support legacy single-choice requests. Browser recovery preserves original copies of old drafts; unchanged legacy submissions retain their original request IDs.
 
-## 证据入口
+## Evidence entry points
 
-| 标记 | 自动化证据                                                                                                                            |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| Q    | [题型契约与评分测试](../apps/api/test/questions.test.ts)                                                                              |
-| A    | [多题型 HTTP 与数据库测试](../apps/api/test/multi-type-api.test.ts)                                                                   |
-| M    | [真实媒体、权限、额度、清理与租约测试](../apps/api/test/assets.test.ts)                                                               |
-| L    | [版本、截止时间、权限与真实 PostgreSQL 并发测试](../apps/api/test/lifecycle.test.ts)、[原流程测试](../apps/api/test/workflow.test.ts) |
-| U    | [历史数据库升级测试](../apps/api/test/multi-type-migration.test.ts)、[浏览器草稿迁移测试](../apps/web/test/work-migration.test.ts)    |
-| B    | [混合题型浏览器闭环](../e2e/multi-type.spec.ts)、[工作恢复与上传竞态](../e2e/protection.spec.ts)                                      |
-| C    | [必需附件容量预留测试](../apps/web/test/answer-capacity.test.ts)                                                                      |
-| P    | [最大合法作业负载脚本](../scripts/benchmark-multi-type.ts)、[原始性能结果](evidence/multi-type-benchmark.json)                        |
-| R    | [恢复演练脚本](../scripts/recovery-drill.mjs)、[15 张表及媒体校验清单](evidence/recovery.json)                                        |
+| Key | Automated evidence                                                                                                                                                          |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Q   | [Question contracts and grading tests](../apps/api/test/questions.test.ts)                                                                                                  |
+| A   | [Multi-type HTTP and database tests](../apps/api/test/multi-type-api.test.ts)                                                                                               |
+| M   | [Real media, authorization, quota, cleanup, and lease tests](../apps/api/test/assets.test.ts)                                                                               |
+| L   | [Version, deadline, authorization, and real PostgreSQL concurrency tests](../apps/api/test/lifecycle.test.ts), [Original workflow tests](../apps/api/test/workflow.test.ts) |
+| U   | [Historical database upgrade tests](../apps/api/test/multi-type-migration.test.ts), [Browser draft migration tests](../apps/web/test/work-migration.test.ts)                |
+| B   | [Mixed-type browser workflow](../e2e/multi-type.spec.ts), [Work recovery and upload races](../e2e/protection.spec.ts)                                                       |
+| C   | [Required attachment capacity reservation tests](../apps/web/test/answer-capacity.test.ts)                                                                                  |
+| P   | [Maximum legal assignment workload script](../scripts/benchmark-multi-type.ts), [Raw performance results](evidence/multi-type-benchmark.json)                               |
+| R   | [Recovery drill script](../scripts/recovery-drill.mjs), [15-table and media verification manifest](evidence/recovery.json)                                                  |
 
-测试使用合成数据、内存 PGlite 或新建的临时 PostgreSQL 实例。未打开、升级或清理现有 `.local/database`。媒体解码测试使用真实文件；A 中的附件行是明确标注的绑定校验夹具，不作为文件解码证据。
+Tests use synthetic data, in-memory PGlite, or newly created temporary PostgreSQL instances. Existing `.local/database` was not opened, upgraded, or cleaned. Media decoding tests use real files; attachment rows in A are explicitly labeled binding-validation fixtures, not evidence of file decoding.
 
-## 45 项需求的本地覆盖
+## Local coverage of 45 requirements
 
-“覆盖”表示对应行为有实现和下列本地证据，不表示其全部设备及部署条件都已验收。用例采用不同分值的等价夹具时，以测试中的断言为准，不将需求示例数字写成另一份实测结果。
+“Coverage” means the behavior is implemented and supported by the local evidence below; it does not mean every device and deployment condition has passed acceptance. Where tests use equivalent fixtures with different points, the test assertions are authoritative. Requirement example values are not reported as separate measured results.
 
-| 编号 | 覆盖行为                                                                          | 证据及限制                                                                    |
-| ---- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| AC01 | 图片／音频选项、选项重排、按稳定 ID 判分、播放不选中                              | Q、A、B                                                                       |
-| AC02 | 首尾空白与显式大小写规则                                                          | Q、A                                                                          |
-| AC03 | 撇号、重音、NFC、连续空白；不自动纠错                                             | Q                                                                             |
-| AC04 | 多空独立权重、缺空拒绝                                                            | Q、A                                                                          |
-| AC05 | 完形各空评分，跨空选项拒绝                                                        | Q、A、B                                                                       |
-| AC06 | 空位和答案键一致性，复制重建 ID                                                   | Q、U、B                                                                       |
-| AC07 | 阅读子题计分与进度，母题不计分                                                    | Q、A、B                                                                       |
-| AC08 | 禁止嵌套、孤立或跨作业父题                                                        | Q、A                                                                          |
-| AC09 | 分组部分得分、组内顺序无关、重复项目拒绝                                          | Q、A、B                                                                       |
-| AC10 | 一对一目标占用不覆盖，多对一有效                                                  | Q、B                                                                          |
-| AC11 | 连线干扰项不要求使用                                                              | Q、A                                                                          |
-| AC12 | 排序明确确认；修改撤销确认；错误序列零分                                          | Q、U、B                                                                       |
-| AC13 | 多个可接受序列、重复／缺卡片拒绝                                                  | Q、A                                                                          |
-| AC14 | 相同可见卡片的等价排列校验                                                        | Q                                                                             |
-| AC15 | 不完整草稿保存、精确发布错误、学生不可见                                          | Q、A、L、B                                                                    |
-| AC16 | 保存和发布版本冲突，保留浏览器编辑                                                | A、L、B；旧发布请求同样要求版本                                               |
-| AC17 | 发布内容、答案键、分值和资源绑定冻结                                              | A、L、M                                                                       |
-| AC18 | 真实 10 MiB PNG、50 MiB PCM WAV 解码；声明超 1 字节 413；实际字节不符拒绝         | M；无额度／上传事件残留                                                       |
-| AC19 | 格式、签名、损坏、像素、动画 WebP、ADPCM WAV、ALAC M4A 拒绝                       | M；AAC-LC M4A 与 MP3 实际转码                                                 |
-| AC20 | 600 秒边界、超时长拒绝、实际播放与倍速                                            | M、B；浏览器实际播放、暂停、倍速与 Range 通过                                 |
-| AC21 | 持久租约恢复、失败状态、取消不复活、刷新附件、保存与上传交错                      | M、B                                                                          |
-| AC22 | 资源归属、题目上下文、原文件、GET／HEAD／Range 权限                               | M、A                                                                          |
-| AC23 | 移除学生撤销读取、播放、提交；教师保留历史访问                                    | M、L、B                                                                       |
-| AC24 | 并发临时额度预占、实际传输最多 3 条、失败释放；最终附件总量独立限制               | M：三条传输拒绝第四条、账户独立、取消释放；A：150 MiB 引用整体拒绝且不绑定；C |
-| AC25 | 删除引用后的宽限期撤销恢复、多引用保留                                            | M、U                                                                          |
-| AC26 | 清理竞争：草稿绑定失败整体回滚；发布／提交成功的资源保留                          | M，在真实 PostgreSQL 重跑；过期答案清理由截止加 7 天规则隔离                  |
-| AC27 | 必需附件、READY、本人、正确题目与类型                                             | M、A、B、C                                                                    |
-| AC28 | 客观题错误选项加照片仍得零分，附件保存且不转人工                                  | A                                                                             |
-| AC29 | 混合与纯人工待批改、最终分数为空、统计不算零分                                    | Q、A、B                                                                       |
-| AC30 | 发布成绩、修订原因、历史版本、学生最终成绩一致                                    | A、B、R                                                                       |
-| AC31 | 量规边界、完整性、草稿私有；不修改学生最终结果                                    | A、B                                                                          |
-| AC32 | 批改版本、并发与精确重试；保存响应丢失后恢复                                      | A、B；canonical 比较兼容 JSONB 对象键顺序                                     |
-| AC33 | 9/10 已批改、一人待批改、一人未提交；submitted=2、graded=1、pending=1、average=90 | A、L                                                                          |
-| AC34 | 无已批改结果的 averagePercent=null                                                | A、L                                                                          |
-| AC35 | 缺题、多题、母题、跨题 ID、客户端分数拒绝；事务不留部分绑定                       | A、Q、L                                                                       |
-| AC36 | 无序集合规范化重试；原文本及排序顺序改变检测                                      | Q、A、L                                                                       |
-| AC37 | 并发最终提交唯一性与重复请求                                                      | A、L，真实 PostgreSQL 多连接                                                  |
-| AC38 | 数据库截止判断；已成功且仍有权限的精确重试                                        | L、A                                                                          |
-| AC39 | 学生公开投影、资源元数据、教师示例／转写／未发布批改隔离                          | M、A、B、R                                                                    |
-| AC40 | 历史数据与请求兼容、旧浏览器草稿和原重试身份恢复                                  | U、A、B                                                                       |
-| AC41 | 数量、单元、Unicode、资源和 JSON 上限；必需附件容量预留                           | Q、A、M、C、B；前后端独立校验                                                 |
-| AC42 | 分组原生选择器、连线按钮／选择器、排序按钮／位置选择器，不依赖拖拽                | B：桌面键盘操作、手机视口点击；不代表完整辅助技术审计                         |
-| AC43 | 桌面及手机视口文件上传、代理播放和界面适配                                        | B：Chrome 流程及 320/360/390/768px 布局通过；不要求真机                       |
-| AC44 | 20 顶层、100 叶子、200 单元，50 并发读取及客观提交；媒体按需加载                  | P、B：本机达到拟定 1 秒阈值；目标环境需在上线时复核                           |
-| AC45 | 数据与原始／派生媒体配套恢复，校验文件及历史提交／成绩                            | R：本地配套恢复通过；生产 PostgreSQL 配套恢复在上线时复核                     |
+| ID   | Covered behavior                                                                                                           | Evidence and limitations                                                                                                           |
+| ---- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| AC01 | Image/audio options, option reordering, grading by stable ID, playback without selection                                   | Q, A, B                                                                                                                            |
+| AC02 | Trimming and explicit case rules                                                                                           | Q, A                                                                                                                               |
+| AC03 | Apostrophes, accents, NFC, repeated whitespace; no autocorrection                                                          | Q                                                                                                                                  |
+| AC04 | Independent blank weights; missing blanks rejected                                                                         | Q, A                                                                                                                               |
+| AC05 | Per-blank cloze grading; options from other blanks rejected                                                                | Q, A, B                                                                                                                            |
+| AC06 | Blank/answer-key consistency; regenerated IDs on duplication                                                               | Q, U, B                                                                                                                            |
+| AC07 | Reading-child scoring and progress; no parent score                                                                        | Q, A, B                                                                                                                            |
+| AC08 | Nested, orphaned, and cross-assignment parents rejected                                                                    | Q, A                                                                                                                               |
+| AC09 | Grouping partial credit, irrelevant within-group order, duplicate items rejected                                           | Q, A, B                                                                                                                            |
+| AC10 | Occupied one-to-one targets do not overwrite answers; many-to-one works                                                    | Q, B                                                                                                                               |
+| AC11 | Matching distractors need not be used                                                                                      | Q, A                                                                                                                               |
+| AC12 | Explicit ordering confirmation; changes revoke confirmation; incorrect sequence scores zero                                | Q, U, B                                                                                                                            |
+| AC13 | Multiple accepted sequences; duplicate/missing cards rejected                                                              | Q, A                                                                                                                               |
+| AC14 | Equivalent permutations of visibly identical cards validated                                                               | Q                                                                                                                                  |
+| AC15 | Incomplete drafts saved; precise publication errors; hidden from students                                                  | Q, A, L, B                                                                                                                         |
+| AC16 | Save/publication version conflicts preserve browser edits                                                                  | A, L, B; legacy publication requests also require a version                                                                        |
+| AC17 | Published content, answer keys, points, and resource bindings frozen                                                       | A, L, M                                                                                                                            |
+| AC18 | Real 10 MiB PNG and 50 MiB PCM WAV decoded; declared limit +1 byte returns 413; actual-byte mismatch rejected              | M; no leftover quota/upload events                                                                                                 |
+| AC19 | Invalid formats, signatures, corruption, pixel limits, animated WebP, ADPCM WAV, and ALAC M4A rejected                     | M; AAC-LC M4A and MP3 actually transcoded                                                                                          |
+| AC20 | 600-second boundary, excessive duration rejected, real playback and speed control                                          | M, B; actual browser play, pause, speed, and Range passed                                                                          |
+| AC21 | Durable lease recovery, failure states, no revival after cancellation, attachment refresh, interleaved saves/uploads       | M, B                                                                                                                               |
+| AC22 | Resource ownership, question context, originals, GET/HEAD/Range authorization                                              | M, A                                                                                                                               |
+| AC23 | Student removal revokes reading, playback, and submission; teachers retain historical access                               | M, L, B                                                                                                                            |
+| AC24 | Concurrent temporary quota reservation, at most 3 active transfers, release on failure; independent final attachment limit | M: fourth transfer rejected, account isolation, cancellation release; A: 150 MiB references rejected atomically without binding; C |
+| AC25 | Grace-period revocation/recovery after reference deletion; retention for multiple references                               | M, U                                                                                                                               |
+| AC26 | Cleanup races: failed draft binding fully rolls back; resources retained after successful publication/submission           | M, rerun against real PostgreSQL; expired-answer cleanup isolated by deadline + 7 days                                             |
+| AC27 | Required attachments, READY state, ownership, correct question and type                                                    | M, A, B, C                                                                                                                         |
+| AC28 | Wrong objective answer plus photo still scores zero; attachment saved without manual conversion                            | A                                                                                                                                  |
+| AC29 | Mixed and manual-only submissions pending; final score null; statistics do not count them as zero                          | Q, A, B                                                                                                                            |
+| AC30 | Grade publication, revision reasons, historical versions, consistent student final results                                 | A, B, R                                                                                                                            |
+| AC31 | Rubric bounds/completeness and private drafts; no changes to student final results                                         | A, B                                                                                                                               |
+| AC32 | Grading versions, concurrency, exact retries; recovery after lost save response                                            | A, B; canonical comparisons support JSONB object-key order                                                                         |
+| AC33 | One graded 9/10, one pending, one not submitted: submitted=2, graded=1, pending=1, average=90                              | A, L                                                                                                                               |
+| AC34 | averagePercent=null when there are no graded results                                                                       | A, L                                                                                                                               |
+| AC35 | Missing/extra questions, parents, cross-question IDs, and client scores rejected; no partial bindings left by transactions | A, Q, L                                                                                                                            |
+| AC36 | Normalized retries for unordered sets; changes to original text and ordering detected                                      | Q, A, L                                                                                                                            |
+| AC37 | Concurrent final-submission uniqueness and duplicate requests                                                              | A, L, real PostgreSQL with multiple connections                                                                                    |
+| AC38 | Database deadline decisions; exact retries after success while access remains valid                                        | L, A                                                                                                                               |
+| AC39 | Student public projections and resource metadata; isolation of teacher examples/transcripts/unpublished grading            | M, A, B, R                                                                                                                         |
+| AC40 | Historical data/request compatibility, old browser drafts, and original retry identity recovery                            | U, A, B                                                                                                                            |
+| AC41 | Count, unit, Unicode, resource, and JSON limits; required attachment capacity reservation                                  | Q, A, M, C, B; independent frontend/backend validation                                                                             |
+| AC42 | Native grouping selectors, matching buttons/selectors, ordering buttons/position selectors; no drag dependency             | B: desktop keyboard and mobile-viewport taps; not a full assistive-technology audit                                                |
+| AC43 | Desktop/mobile-viewport uploads, proxy playback, and UI adaptation                                                         | B: Chrome workflows and 320/360/390/768px layouts passed; physical devices not required                                            |
+| AC44 | 20 top-level questions, 100 leaves, 200 units, 50 concurrent reads/objective submissions; on-demand media                  | P, B: proposed local 1-second threshold met; recheck target environment at release                                                 |
+| AC45 | Coordinated data and original/derived media restoration, checking files and historical submissions/grades                  | R: local coordinated restore passed; recheck production PostgreSQL coordinated recovery at release                                 |
 
-## 浏览器验收与后续上线检查
+## Browser acceptance and follow-up release checks
 
-开发机需提供可执行的 `ffmpeg`、`ffprobe`，或在环境中设置 `FFMPEG_PATH`、`FFPROBE_PATH`；Sharp 使用锁文件中的依赖。私有文件目录通过 `ASSET_DIRECTORY` 配置，生产环境必须使用绝对路径及持久卷。接入现有数据前，先备份数据库与媒体，再执行 `npm run db:migrate`，沿用已有启动流程。新功能测试不会代替实际数据的备份或自动升级现有演示库。
+The development machine needs executable `ffmpeg` and `ffprobe`, or environment variables `FFMPEG_PATH` and `FFPROBE_PATH`. Sharp uses lockfile dependencies. Configure private storage through `ASSET_DIRECTORY`; production requires an absolute path and persistent volume. Before connecting existing data, back up the database and media, then run `npm run db:migrate` and use the existing startup flow. New-feature tests do not replace real-data backups or automatically upgrade the existing demo database.
 
 ```sh
 npm run check
@@ -90,10 +90,10 @@ npm run format:check
 npm audit --audit-level=low
 ```
 
-真实 PostgreSQL 测试指定一个专用测试库的 `TEST_DATABASE_URL`。性能脚本要求 `BENCH_MULTI_DATABASE_URL` 指向**空库**且名称以 `_multi_bench` 结尾；不会清空已有库。测试使用临时媒体目录，不使用教学文件目录。
+Real PostgreSQL tests use `TEST_DATABASE_URL` for a dedicated test database. Performance scripts require `BENCH_MULTI_DATABASE_URL` to point to an **empty database** whose name ends in `_multi_bench`; existing databases are not cleared. Tests use temporary media directories, not teaching-file storage.
 
-本次浏览器验收采用已安装的 Chrome。桌面和 390px 手机视口的完整套件共 30 项通过；补充混合题型流程在 320、360、390、768px 检查教师编辑（含图片、音频选项和作答区素材）、学生作答（含附件）及教师批改页面，无页面横向溢出；新增题型操作按钮采用至少 44px 的点击高度，并断言排序确认按钮在各视口下满足该尺寸。真实文件上传、图片放大、音频播放／暂停／倍速、作答恢复、提交和最终成绩均通过。截图保存在本地忽略目录 `test-results/`；这些视口测试不等同于所有手机浏览器引擎兼容性认证。
+Browser acceptance used the installed Chrome. The complete desktop and 390px mobile-viewport suite passed 30 tests. Additional mixed-type checks at 320, 360, 390, and 768px covered teacher editing (including image/audio options and answer-area materials), student answers (including attachments), and teacher grading, without page overflow. New question-type action buttons have at least 44px tap height; assertions check ordering-confirmation buttons at each viewport. Real-file uploads, image zoom, audio play/pause/speed, answer recovery, submission, and final grades passed. Screenshots are in the locally ignored `test-results/` directory. These viewport tests are not certification for every mobile browser engine.
 
-后续正式部署时复核容器运行、目标 PostgreSQL 与媒体目录同恢复点的恢复演练、多轮负载和媒体下载延迟。Docker／Caddy 配置及 CI 已补入 FFmpeg、Sharp、私有媒体卷检查；当前开发机未安装 Docker，本次未执行容器构建，也未运行这批改动的托管 CI。这些后续工作不列为本次浏览器交付的未完成项。
+At formal deployment, recheck container execution, target PostgreSQL/media restoration to the same recovery point, multiple load runs, and media download latency. Docker/Caddy configuration and CI now include FFmpeg, Sharp, and private-media-volume checks. Docker is not installed on the current development machine; this delivery did not build containers or run hosted CI for these changes. These follow-up tasks are not unfinished items for this browser delivery.
 
-旧流程曾有一次未复现的 401；复验结果与保留的诊断说明见 [最新验证记录](VERIFICATION.md#multi-type-upgrade-2026-10-08)。
+The legacy workflow once returned a 401 that could not be reproduced. See [Latest verification](VERIFICATION.md#multi-type-upgrade-2026-10-08) for rerun results and retained diagnostics.

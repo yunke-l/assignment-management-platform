@@ -9,3 +9,8 @@ node_modules
 test-results
 playwright-report
 coverage
+
+docs/private
+docs/BACKEND_AND_RESUME.md
+docs/PORTFOLIO.md
+docs/DEVELOPMENT_PLAN.md

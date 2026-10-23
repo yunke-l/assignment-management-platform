@@ -1,80 +1,80 @@
-# Classwork 猫头鹰主题
+# Classwork owl theme
 
-采用轻盈的专业控件，配合猫头鹰 Ollie 的少量趣味点缀。工作区以白色、浅灰绿和森林绿为主，暖色集中在欢迎区和小装饰，让教师长时间编辑时保持清晰、安静。
+Lightweight professional controls pair with small playful touches from Ollie the owl. The workspace uses white, pale gray-green, and forest green. Warm colors are concentrated in the welcome area and small decorations, keeping long editing sessions clear and calm for teachers.
 
-## 页面与交互
+## Pages and interactions
 
-- 登录页采用读书猫头鹰、简短欢迎语和独立登录卡片。
-- 作业、班级和账号页面使用统一的导航、标题、表单和状态标签。猫头鹰出现在欢迎区、空状态及提交结果中。
-- 作业列表独占主内容区；打开作业后进入独立详情页，查看题目和进度时不再与列表争用宽度。编辑时使用独立编辑页，并收起欢迎横幅。
-- 按钮统一高度、圆角和主次层级，移除厚重的底部阴影；输入框使用细边框、柔和绿色焦点和明确的错误状态。
-- 选项采用紧凑行，左侧圆形控件直接标记正确答案，右侧图标移除选项。删除后提供 Undo，恢复文字与答案标记。
-- 截止日期与时间分开输入；校验提示紧贴字段，保存失败保留内容。底部保存栏持续显示当前状态及主要操作。
-- 邀请码提供复制按钮与成功／失败反馈；有效期提供常用时长快捷选项。
-- 手机和平板采用单栏工作区；新建或打开作业后进入对应页面，桌面和手机均提供返回作业列表按钮与面包屑导航。窄屏表单使用单列布局。
-- 保留 Classwork 名称、英文界面与既有权限、评分及成员规则。
+- The sign-in page uses a reading owl, a short welcome message, and a separate sign-in card.
+- Assignment, class, and account pages share navigation, headings, forms, and status labels. The owl appears in the welcome area, empty states, and submission results.
+- The assignment list occupies the main content area. Opening an assignment navigates to a separate detail page so questions and progress do not compete with the list for width. Editing uses its own page and hides the welcome banner.
+- Buttons share consistent heights, corners, and action hierarchy, without heavy bottom shadows. Inputs use thin borders, soft green focus styles, and clear error states.
+- Options use compact rows, with a round control on the left to mark the correct answer and a remove icon on the right. Undo restores deleted text and the correct-answer marker.
+- Due date and time have separate inputs. Validation appears beside each field, and failed saves retain content. A persistent bottom save bar shows current status and primary actions.
+- Invitation codes provide a copy button and success/failure feedback; expiry settings offer shortcuts for common durations.
+- Phones and tablets use a single-column workspace. Creating or opening an assignment navigates to its page. Desktop and mobile both provide a back-to-list button and breadcrumbs. Narrow forms use one column.
+- The Classwork name, English interface, and existing authorization, grading, and membership rules are retained.
 
-## 内容保护
+## Content protection
 
-### 页面地址与返回状态
+### Page URLs and return state
 
-- `/assignments` 是作业列表，搜索、班级、状态和页码记录在查询参数中；`/assignments/:id` 是详情，`/assignments/new` 和 `/assignments/:id/edit` 是新建及编辑页。班级与账号也分别使用 `/classes`、`/account` 地址。
-- 刷新或直接打开详情／编辑地址会加载对应作业；登录失效后重新登录仍可回到当前地址。已移除、无权限或不存在的作业显示错误及返回入口，不自动跳到其他作业。
-- 返回列表保留筛选、分页、尚未提交的搜索文字、滚动位置和打开过的作业焦点。浏览器前进／后退同步页面与 URL。导航记录按账号和标签页隔离，存储不可用时退回内存。
-- 点击返回列表会保留编辑中的内容；编辑器底部的 Cancel 明确舍弃本地修改。浏览器后退与应用导航共用密码／上传保护，保存或提交期间阻止离开，密码字段不写入导航记录。
-- 生产服务对上述前端地址返回应用入口，同时保留 API 和缺失静态文件的正常 404。`e2e/navigation.spec.ts` 验证地址、刷新、列表恢复和浏览器后退保护；构建冒烟检查验证生产环境的深层地址。
+- `/assignments` is the list, with search, class, status, and page stored in query parameters. `/assignments/:id` shows details; `/assignments/new` and `/assignments/:id/edit` create and edit assignments. Classes and account pages use `/classes` and `/account`.
+- Refreshing or directly opening a detail/edit URL loads that assignment. Signing back in after session expiry returns to the current URL. Removed, unauthorized, or missing assignments show an error and a return action, without jumping to another assignment.
+- Returning to the list restores filters, pagination, unsubmitted search text, scroll position, and focus on the opened assignment. Browser forward/back keeps the page and URL synchronized. Navigation records are isolated by account and tab, with an in-memory fallback when storage is unavailable.
+- Back-to-list retains work being edited; Cancel at the bottom of the editor explicitly discards local changes. Browser back and application navigation share password/upload protection. Navigation is blocked during saves/submissions, and password fields are excluded from navigation records.
+- The production server returns the application entry point for these frontend URLs while preserving normal 404 responses for API routes and missing static files. `e2e/navigation.spec.ts` checks URLs, refresh, list restoration, and browser-back protection; build smoke checks validate production deep links.
 
-### 草稿与敏感内容
+### Drafts and sensitive content
 
-- 未保存作业、已保存草稿的本地修改及学生答案按账号隔离，暂存在当前标签页的 `sessionStorage`，切换页面或正常刷新后可继续。
-- 保存／提交成功后清理对应本地副本；失败和版本冲突保留输入。存在本地修改时暂停发布，避免误发旧版本。
-- 班级输入和邀请码只在当前页面内存中保留，包括会话过期后重新登录；刷新会清除。密码不进入临时存储，离开密码页面前提醒。
-- 取消编辑、舍弃副本和退出登录均有明确确认。退出会清除该账号在此标签页的未完成内容，已保存数据不受影响。
-- 浏览器存储不可用时显示提示，退回页面内存保留；原生刷新提醒受浏览器限制，不能保证手机强制终止、关闭标签页或清除浏览器数据后恢复。这里不是服务器自动保存。
+- Unsaved assignments, local changes to saved drafts, and student answers are isolated by account and temporarily stored in the current tab's `sessionStorage`, allowing work to continue after navigation or a normal refresh.
+- Successful saves/submissions clear the corresponding local copy; failures and version conflicts retain input. Publication is paused while local changes exist to avoid publishing an older version accidentally.
+- Class input and invitation codes remain only in the current page's memory, including after signing back in following expiry; refreshing clears them. Passwords never enter temporary storage, and leaving the password page triggers a warning.
+- Canceling edits, discarding copies, and signing out require explicit confirmation. Signing out clears unfinished work for that account in this tab; saved data is unaffected.
+- If browser storage is unavailable, a notice appears and content stays in page memory. Native refresh warnings depend on browser behavior and cannot guarantee recovery after a mobile force quit, tab closure, or clearing browser data. This is not server autosave.
 
-## 色彩与实现
+## Colors and implementation
 
-| 用途           | 色值      |
-| -------------- | --------- |
-| 主要文字       | `#243a33` |
-| 品牌与主要操作 | `#245747` |
-| 次要文字       | `#697771` |
-| 页面背景       | `#f6f8f7` |
-| 卡片背景       | `#ffffff` |
-| 欢迎区背景     | `#fbf2d9` |
-| 选中状态       | `#edf3e3` |
-| 键盘焦点       | `#367d66` |
+| Purpose                   | Color     |
+| ------------------------- | --------- |
+| Primary text              | `#243a33` |
+| Brand and primary actions | `#245747` |
+| Secondary text            | `#697771` |
+| Page background           | `#f6f8f7` |
+| Card background           | `#ffffff` |
+| Welcome background        | `#fbf2d9` |
+| Selected state            | `#edf3e3` |
+| Keyboard focus            | `#367d66` |
 
-猫头鹰为项目内原创 SVG，位于 `apps/web/src/Owl.tsx`，提供读书、挥手和庆祝三个姿态；网站图标位于 `apps/web/public/favicon.svg`。使用系统字体，无外部图片、字体请求。
+The owl is an original project SVG in `apps/web/src/Owl.tsx`, with reading, waving, and celebrating poses. The favicon is in `apps/web/public/favicon.svg`. System fonts are used, without external image or font requests.
 
-### Mantine 组件库
+### Mantine component library
 
-前端引入 `@mantine/core` 和 `@mantine/hooks` 9.7.3，由入口的 `MantineProvider` 统一提供森林绿主题、系统字体、圆角及浅色模式。主题配置位于 `apps/web/src/theme.ts`，组件定制样式位于 `apps/web/src/theme.module.css`，同时适配项目现有的 14px 根字号和手机输入框 16px 字号。
+The frontend uses `@mantine/core` and `@mantine/hooks` 9.7.3. The entry-point `MantineProvider` supplies the forest-green theme, system fonts, rounded corners, and light mode. Theme configuration is in `apps/web/src/theme.ts`; component styles are in `apps/web/src/theme.module.css`, accommodating the existing 14px root font size and 16px mobile inputs.
 
-首批迁移包括登录／邀请注册、修改密码表单，以及全局确认弹窗。表单使用 Mantine `TextInput`、`Button` 和 `Alert`，继续沿用已有请求、原生字段校验、密码清理和内容保护逻辑。确认弹窗使用 `Modal`，默认聚焦取消操作，支持 Tab 焦点限制、Escape 取消和关闭后焦点恢复；点击遮罩不会确认或舍弃内容。
+The initial migration covers sign-in/invitation registration, the password-change form, and global confirmation dialogs. Forms use Mantine `TextInput`, `Button`, and `Alert`, retaining existing requests, native field validation, password cleanup, and content-protection logic. Confirmation dialogs use `Modal`, focus Cancel by default, trap Tab focus, support Escape cancellation, and restore focus on close. Clicking the overlay neither confirms nor discards content.
 
-页面布局、猫头鹰插画及题目编辑器继续使用项目组件。后续通用控件可按页面逐步迁移，不需要引入 Tailwind 或更改内容数据结构。旧的全局表单样式排除 Mantine 控件，避免影响组件库的布局和状态样式。入口按需导入 Mantine 基础样式及已使用组件的依赖样式，先于应用样式加载；增加组件时需一并补齐其样式依赖。组件细节通过主题和 CSS Modules 定制。生产构建将 React 与 Mantine 的共享运行时代码拆为独立的 UI 文件，便于浏览器缓存。
+Page layouts, owl illustrations, and question editors continue to use project components. Other shared controls can migrate page by page without introducing Tailwind or changing content data structures. Legacy global form styles exclude Mantine controls to avoid affecting library layouts and states. The entry point imports Mantine base styles and dependencies for used components on demand, before application styles; adding components also requires their style dependencies. Details are customized through the theme and CSS Modules. Production builds split shared React/Mantine runtime code into a separate UI file for browser caching.
 
-`e2e/ui-library.spec.ts` 覆盖确认弹窗的焦点循环、焦点恢复、遮罩行为、账号切换的内容保留，以及登录请求中的禁用状态和失败恢复；桌面与手机布局继续由既有外观测试覆盖。
+`e2e/ui-library.spec.ts` covers confirmation-dialog focus cycling and restoration, overlay behavior, content retention when switching accounts, disabled states during sign-in requests, and failure recovery. Existing appearance tests continue to cover desktop and mobile layouts.
 
-保留原生表单标签、单选控件和可见键盘焦点；装饰插图对辅助技术隐藏，登录页主插图提供文字标签。支持减少动态效果设置，手机输入框字号至少 16px。这些措施不代表完成了全面的无障碍认证。
+Native form labels, radio controls, and visible keyboard focus are retained. Decorative illustrations are hidden from assistive technologies; the main sign-in illustration has a text label. Reduced-motion preferences are supported, and mobile inputs use at least 16px text. These measures do not constitute comprehensive accessibility certification.
 
-## 页面预览与检查
+## Page previews and checks
 
-2026-10-07 更新：
+Updated 2026-10-07:
 
-- [桌面编辑器](evidence/controls-desktop.png)
-- [Computer Use 手机实际操作](evidence/controls-mobile.jpg)
-- [舍弃编辑确认框](evidence/controls-confirmation.jpg)
+- [Desktop editor](evidence/controls-desktop.png)
+- [Mobile interaction using Computer Use](evidence/controls-mobile.jpg)
+- [Discard-edit confirmation](evidence/controls-confirmation.jpg)
 
-以下为上一版猫头鹰视觉的历史截图：
+Historical screenshots of the previous owl design:
 
-- [桌面登录页](evidence/owl-login-desktop.png)
-- [桌面工作区](evidence/owl-workspace-desktop.png)
-- [手机工作区](evidence/owl-workspace-mobile.png)
-- [教师成绩详情](evidence/desktop-teacher-results.png)
-- [学生提交结果](evidence/desktop-student-result.png)
+- [Desktop sign-in](evidence/owl-login-desktop.png)
+- [Desktop workspace](evidence/owl-workspace-desktop.png)
+- [Mobile workspace](evidence/owl-workspace-mobile.png)
+- [Teacher results](evidence/desktop-teacher-results.png)
+- [Student submission result](evidence/desktop-student-result.png)
 
-`e2e/appearance.spec.ts` 检查登录、工作区、编辑器、班级、账号、手机详情定位，以及 320px 和 768px 布局；检查页面横向溢出和未处理的 JavaScript 错误，并生成截图。原有教师发布、学生提交、成绩保留、会话与题目编辑流程继续由 `e2e/workflow.spec.ts` 验证。`e2e/protection.spec.ts` 覆盖内容恢复、保存失败、版本冲突、账号隔离、邀请码复制、敏感字段提醒及存储不可用场景。
+`e2e/appearance.spec.ts` checks sign-in, workspace, editor, classes, account, mobile detail positioning, and 320px/768px layouts. It checks horizontal overflow and unhandled JavaScript errors and generates screenshots. Existing teacher publication, student submission, grade retention, session, and question-editing workflows remain covered by `e2e/workflow.spec.ts`. `e2e/protection.spec.ts` covers content recovery, failed saves, version conflicts, account isolation, invitation-code copying, sensitive-field warnings, and unavailable storage.
 
-截图及测试均使用独立测试数据库和合成数据。手机检查使用浏览器模拟，未覆盖实体 iOS/Safari 设备。完整记录见 [验证记录](VERIFICATION.md)。
+Screenshots and tests use an isolated test database and synthetic data. Mobile checks use browser emulation and do not cover physical iOS/Safari devices. See [Verification](VERIFICATION.md) for the full record.

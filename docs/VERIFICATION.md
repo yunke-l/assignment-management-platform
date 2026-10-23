@@ -57,7 +57,7 @@ The measured copy took 543 ms and restore plus table verification took 1,459 ms 
 - [Automated teacher workflow recording](evidence/teacher-workflow.webm)
 - [Automated student workflow recording](evidence/student-workflow.webm)
 
-All evidence uses synthetic data. These are automated workflow recordings, not evidence of real adoption or of the project owner's independent understanding. Playwright also writes the local HTML report and test recordings; CI is configured to retain them as artifacts.
+All evidence uses synthetic data. These are automated workflow recordings, not evidence of real adoption. Playwright also writes the local HTML report and test recordings; CI is configured to retain them as artifacts.
 
 ## Remaining external verification
 
@@ -67,7 +67,7 @@ All evidence uses synthetic data. These are automated workflow recordings, not e
 - Mobile coverage uses Chromium viewport/touch emulation, not physical iOS/Safari hardware. This is not a comprehensive assistive-technology audit.
 - The September build's two third-party Zod PURE-comment warnings were corrected in the October code audit below.
 
-Do not describe synthetic data sizes, this single local latency sample, or generated implementation as production users, uptime guarantees, measured commercial impact or independently demonstrated interview proficiency.
+Do not describe synthetic data sizes, this single local latency sample, or generated implementation as production users, uptime guarantees, measured commercial impact or independently verified production readiness.
 
 ## Demo startup correction (2026-09-25)
 

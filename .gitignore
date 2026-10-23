@@ -10,3 +10,9 @@ coverage/
 .DS_Store
 test-results/
 playwright-report/
+
+# Personal study and career documents stay local.
+/docs/private/
+/docs/BACKEND_AND_RESUME.md
+/docs/PORTFOLIO.md
+/docs/DEVELOPMENT_PLAN.md
