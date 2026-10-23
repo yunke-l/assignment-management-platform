@@ -8,6 +8,7 @@ import {
   mediaLimits,
   publicQuestion,
   scoreUnitCount,
+  validationMessage,
   type AssignmentDetailV2,
   type Classroom,
   type QuestionV2,
@@ -16,7 +17,6 @@ import {
 import { request, ApiError } from './api';
 import { useConfirm } from './ConfirmDialog';
 import { useWork, useWorkDraft, useWorkGuard } from './WorkProtection';
-import { TeacherKey } from './AssignmentView';
 import { QuestionEditor } from './QuestionEditor';
 import {
   cloneQuestions,
@@ -306,7 +306,7 @@ export function AssignmentForm({
                 ? issue.path.slice(2).join('.') || 'questions'
                 : issue.path.join('.'),
             code: 'INVALID_DRAFT',
-            message: issue.message,
+            message: validationMessage(issue),
           })),
         );
         setShowErrors(true);
@@ -636,7 +636,7 @@ export function AssignmentForm({
           </p>
 
           <p role="status" className={requestBytes > mediaLimits.jsonBytes ? 'error' : 'footnote'}>
-            Question JSON: {(requestBytes / 1048576).toFixed(3)} / 2 MiB ·{' '}
+            Question content size: {(requestBytes / 1048576).toFixed(3)} / 2 MiB ·{' '}
             {Math.max(0, mediaLimits.jsonBytes - requestBytes).toLocaleString()} bytes remaining.
             Saving checks the final UTF-8 payload.
           </p>
@@ -743,7 +743,6 @@ export function AssignmentForm({
                           }))
                         }
                       />
-                      {preview === 'teacher' && <TeacherKey q={q} token={token} />}
                     </div>
                   );
                 return root.type === 'COMPOSITE' ? (

@@ -7,7 +7,7 @@ import { json, static as serveStatic } from 'express';
 import { fileURLToPath } from 'node:url';
 import helmet from 'helmet';
 import { ZodError } from 'zod';
-import { mediaLimits } from '@amp/contracts';
+import { mediaLimits, validationMessages } from '@amp/contracts';
 import { AppModule } from './app.module.js';
 import { cookieName } from './auth/session.js';
 
@@ -37,7 +37,7 @@ class ApiErrorFilter implements ExceptionFilter {
           : (parserStatus ?? 500);
     const message =
       error instanceof ZodError
-        ? error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')
+        ? validationMessages(error.issues).join(' ')
         : error instanceof HttpException
           ? error.message
           : parserStatus === 413

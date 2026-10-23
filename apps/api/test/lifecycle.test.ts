@@ -230,6 +230,22 @@ test('rejoining an existing membership does not consume another use', async () =
   const [row] = await db.query('SELECT uses FROM invitations WHERE id=$1', [code.id]);
   assert.equal(row!.uses, 1);
 });
+test('malformed invitation codes explain how to correct them', async () => {
+  for (const invitation of ['short-code', 'A'.repeat(42) + '!', 'A'.repeat(44)]) {
+    const result = await http
+      .post('/api/auth/register')
+      .send({
+        email: 'invalid-invitation@example.test',
+        name: 'New Student',
+        password: 'Registration123!',
+        invitation,
+      })
+      .expect(400);
+    assert.match(result.body.message, /43 letters, numbers, hyphens/);
+    assert.match(result.body.message, /teacher or administrator/);
+    assert.doesNotMatch(result.body.message, /pattern|\^\[/);
+  }
+});
 test('invited registration is atomic and cannot choose a teacher role', async () => {
   const id = await createClass();
   const code = await invite(id, 2);
@@ -243,7 +259,10 @@ test('invited registration is atomic and cannot choose a teacher role', async ()
     .post('/api/auth/register')
     .send({ ...data, role: 'TEACHER' })
     .expect(400);
-  const result = await http.post('/api/auth/register').send(data).expect(201);
+  const result = await http
+    .post('/api/auth/register')
+    .send({ ...data, invitation: `  ${code.token}\n` })
+    .expect(201);
   assert.equal(result.body.user.role, 'STUDENT');
   assert.equal(result.body.user.password_hash, undefined);
   await http.post('/api/auth/register').send(data).expect(409);

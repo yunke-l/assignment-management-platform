@@ -12,11 +12,9 @@ import {
 import classes from './theme.module.css';
 
 export const theme = createTheme({
-  // The existing application uses a 14px root; keep Mantine's rem sizes in sync.
-  scale: 16 / 14,
   fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
   headings: { fontFamily: "'Avenir Next', 'Trebuchet MS', system-ui, sans-serif" },
-  fontSizes: { md: rem(14) },
+  fontSizes: { xs: rem(14), sm: rem(14), md: rem(16), lg: rem(18), xl: rem(20) },
   lineHeights: { md: '1.5' },
   primaryColor: 'forest',
   primaryShade: 7,

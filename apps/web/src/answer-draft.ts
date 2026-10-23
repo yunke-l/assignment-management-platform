@@ -7,6 +7,7 @@ export const draftAnswerSchema = z
     placements: z.record(z.string(), z.string()).default({}),
     pairs: z.record(z.string(), z.string()).default({}),
     orderedItemIds: z.array(z.string()).default([]),
+    // Accept older saved drafts; manual order confirmation is no longer used.
     confirmed: z.boolean().default(false),
     text: z.string().default(''),
     assetIds: z.array(z.string()).default([]),

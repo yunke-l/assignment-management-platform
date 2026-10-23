@@ -126,6 +126,8 @@ Content is an allowlisted AST: paragraph, heading, list, image and audio blocks 
 | ORDERING      | `{orderedItemIds,confirmed:true}` |
 | RESPONSE      | `{text,assetIds}`                 |
 
+Ordering submits the currently displayed sequence without a separate confirmation step. The client fills `confirmed:true` automatically for API compatibility.
+
 All leaves appear exactly once; containers cannot receive answers. IDs must belong to the frozen question. Weighted fill, cloze, grouping and matching give per-unit partial credit; ordering is all-or-nothing. Fill matching trims outer Unicode whitespace, normalizes NFC and optionally folds ASCII case; punctuation, accents and interior whitespace remain significant. The request hash canonicalizes unordered ID collections but retains raw text and sequence order. Exact retries preserve the saved result even after the deadline when access remains active. Final results include `gradingStatus`, objective totals, nullable final `score`, `maxScore`, `gradingVersion`, `gradedAt` and `submittedAt`. Any manual response keeps the final score null until the teacher publishes grading.
 
 `GET /assignments/:id/submissions/:submissionId` is restricted to the owning teacher or that submission's active student. It returns answers and results; teacher results include per-unit scoring, grading draft and revision history. Student results expose only their answers, released feedback and allowed aggregate grades. Draft grades, correctness, scoring units, explanations and keys remain private. Stats and per-question/unit analyses exclude pending final scores from final averages and return null for empty denominators.

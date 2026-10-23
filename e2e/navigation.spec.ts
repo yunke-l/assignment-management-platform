@@ -2,10 +2,6 @@ import { selectChoice } from './controls.js';
 import { test, expect, type Page } from '@playwright/test';
 
 const origin = 'http://127.0.0.1:5175';
-const sidebar = (page: Page, name: string) =>
-  page
-    .getByRole('navigation', { name: 'Workspace navigation' })
-    .getByRole('button', { name, exact: true });
 async function login(page: Page) {
   await page.goto('/');
   await page.getByLabel('Email', { exact: true }).fill('teacher@example.test');
@@ -130,7 +126,7 @@ test('browser back and forward preserve unfinished editor content and direct edi
 
 test('cancelled browser back keeps password fields and history consistent', async ({ page }) => {
   await login(page);
-  await sidebar(page, 'Account').click();
+  await page.getByRole('button', { name: 'Change password for Alex Morgan', exact: true }).click();
   await page.getByLabel('Current password').fill('sensitive unfinished password');
   // Do not await goBack: the router deliberately blocks the transition.
   await page.evaluate(() => window.history.back());

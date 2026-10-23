@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
-import { loginSchema } from '@amp/contracts';
+import { loginSchema, validationMessages } from '@amp/contracts';
+import { ZodError } from 'zod';
 import { Database } from './database.js';
 import { digest, newToken } from '../auth/session.js';
 // Operator-only CLI. No public teacher-registration or demo-seed endpoint.
@@ -31,6 +32,12 @@ try {
     console.log('Old sessions pruned.');
   } else
     throw new Error('Usage: accounts.ts invite-teacher EMAIL | revoke-user EMAIL | prune-sessions');
+} catch (error) {
+  if (!(error instanceof ZodError)) throw error;
+  console.error(
+    validationMessages(error.issues.map((issue) => ({ ...issue, path: ['email'] }))).join(' '),
+  );
+  process.exitCode = 1;
 } finally {
   await db.onModuleDestroy();
 }

@@ -29,7 +29,7 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
   const studentEmail = `e2e-${info.project.name}-${Date.now()}@example.test`;
   await login(page);
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Make learning happen.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Assignments', level: 1 })).toBeVisible();
   await navigate(page, 'Classes');
   await page.getByLabel('Class name').fill(className);
   await page.getByRole('button', { name: 'Create class', exact: true }).click();
@@ -51,7 +51,7 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
     await student.getByLabel('Email', { exact: true }).fill(studentEmail);
     await student.getByLabel('Password', { exact: true }).fill(password);
     await student.getByRole('button', { name: 'Create account', exact: true }).click();
-    await expect(student.getByRole('heading', { name: 'You’re all caught up.' })).toBeVisible();
+    await expect(student.getByRole('heading', { name: 'No assignments available.' })).toBeVisible();
     await navigate(page, 'Assignments');
     await page.getByRole('button', { name: '+ New assignment', exact: true }).click();
     await page.getByLabel('Title', { exact: true }).fill(title);
@@ -149,7 +149,7 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
     await student.reload();
     await expect(student.getByRole('alert')).toBeVisible();
     await student.getByRole('button', { name: '↑ Back to assignments', exact: true }).click();
-    await expect(student.getByRole('heading', { name: 'You’re all caught up.' })).toBeVisible();
+    await expect(student.getByRole('heading', { name: 'No assignments available.' })).toBeVisible();
     await navigate(page, 'Assignments');
     await page
       .getByRole('button')
@@ -160,9 +160,9 @@ test('teacher invites a student, edits and publishes; student submits; teacher p
     const cookie = (await page.context().cookies()).find((c) => c.name === 'classwork_session')!;
     expect(cookie.httpOnly).toBe(true);
     await page.getByRole('button', { name: 'Sign out', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
     const replay = await page.request.get('/api/auth/me', {
       headers: { Authorization: `Bearer ${cookie.value}` },
     });
@@ -179,7 +179,7 @@ test('keyboard sign-in, empty filter, error recovery and session expiry', async 
   await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
   await page.keyboard.type(password);
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Make learning happen.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Assignments', level: 1 })).toBeVisible();
   await page.getByLabel('Search title').fill(`No matches ${Date.now()}`);
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No matching assignments.' })).toBeVisible();
@@ -199,7 +199,7 @@ test('keyboard sign-in, empty filter, error recovery and session expiry', async 
   await expect(page.getByRole('heading', { name: 'No matching assignments.' })).toBeVisible();
   await page.context().clearCookies();
   await selectChoice(page.getByLabel('Filter by status'), 'PUBLISHED');
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('expired');
 });
 

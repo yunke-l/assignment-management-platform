@@ -1,5 +1,5 @@
 import { InputField, SelectField, Button, TextAreaField } from './Controls';
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import {
   answerV2Schema,
   contentText,
@@ -9,6 +9,7 @@ import {
   type PublicQuestionV2,
   type QuestionV2,
   type ChoiceV2,
+  type QuestionResult,
 } from '@amp/contracts';
 import { ContentView, FileUpload, AssetPreview } from './Media';
 import { questionLabels } from './question-editor';
@@ -49,7 +50,8 @@ export function actualAnswer(q: Leaf, draft: DraftAnswer): AnswerV2 | null {
     case 'ORDERING':
       payload = {
         orderedItemIds: draft.orderedItemIds.length ? draft.orderedItemIds : q.config.initialOrder,
-        confirmed: draft.confirmed,
+        // The displayed sequence is the answer; keep the existing API's compatibility flag.
+        confirmed: true,
       };
       break;
     case 'RESPONSE':
@@ -98,8 +100,21 @@ export function restoreAnswer(answer: AnswerV2): DraftAnswer {
 }
 export const choiceLabel = (choice: ChoiceV2, index = 0) =>
   choice.label || contentText(choice.content).trim() || `Item ${index + 1}`;
+function AnswerChoice({ choice, token }: { choice?: ChoiceV2; token: string }) {
+  if (!choice) return <p>Not set</p>;
+  const hasText = !!contentText(choice.content).trim();
+  const hasMedia = choice.content.some((block) => block.type === 'image' || block.type === 'audio');
+  return (
+    <>
+      {!hasText && (choice.label || !hasMedia) && <p>{choice.label || 'Not set'}</p>}
+      <ContentView content={choice.content} token={token} />
+    </>
+  );
+}
 export function QuestionAnswer({
   q,
+  anchorId,
+  children,
   number,
   answer,
   onChange,
@@ -107,11 +122,15 @@ export function QuestionAnswer({
   assignmentId,
   disabled,
   teacher = false,
+  showAnswerKey = teacher,
+  result,
   onStatus,
   onUploadBusy,
   canUpload,
 }: {
   q: Leaf;
+  anchorId?: string;
+  children?: ReactNode;
   number: string;
   answer: DraftAnswer;
   onChange: (change: (old: DraftAnswer) => DraftAnswer) => void;
@@ -119,11 +138,15 @@ export function QuestionAnswer({
   assignmentId?: string;
   disabled: boolean;
   teacher?: boolean;
+  showAnswerKey?: boolean;
+  result?: Pick<QuestionResult, 'score' | 'maxScore' | 'units'>;
   onStatus?: (id: string, asset: AssetView | null) => void;
   onUploadBusy?: (key: string, busy: boolean) => void;
   canUpload?: (id: string, kind: 'image' | 'audio', bytes: number) => string | null;
 }) {
   answer = compatibleDraft(q, answer);
+  const key = teacher && showAnswerKey && 'answerKey' in q ? q : null;
+  const choiceGroup = useId();
   const [activeLeft, setActiveLeft] = useState<string | null>(null);
   const [hint, setHint] = useState('');
   function mapValue(field: 'blanks' | 'placements' | 'pairs', id: string, value: string) {
@@ -145,15 +168,39 @@ export function QuestionAnswer({
     }
     setHint('');
     mapValue('pairs', leftId, rightId);
+    setActiveLeft(null);
   }
   const blank = (id: string) => {
     if (q.type !== 'FILL_BLANK' && q.type !== 'CLOZE_CHOICE') return null;
     const index = q.config.blanks.findIndex((b) => b.id === id),
       gap = q.config.blanks[index];
+    if (key?.type === 'FILL_BLANK' || key?.type === 'CLOZE_CHOICE') {
+      let value: string | undefined;
+      if (key.type === 'FILL_BLANK') {
+        value = key.answerKey.answers.find((a) => a.blankId === id)?.values.join(' / ');
+      } else {
+        const correctId = key.answerKey.answers.find((a) => a.blankId === id)?.optionId;
+        const option = key.config.blanks
+          .find((b) => b.id === id)
+          ?.options.find((o) => o.id === correctId);
+        if (option) value = choiceLabel(option);
+      }
+      return (
+        <span
+          className="inline-answer teacher-blank-answer"
+          role="note"
+          aria-label={`Question ${number} blank ${index + 1} answer key`}
+        >
+          <strong>{value || 'Not set'}</strong>
+          {gap && 'caseSensitive' in gap && (
+            <small>{gap.caseSensitive ? 'Case sensitive' : 'Not case sensitive'}</small>
+          )}
+        </span>
+      );
+    }
     if (q.type === 'FILL_BLANK')
       return (
         <label className="inline-answer">
-          Blank {index + 1}
           <InputField
             value={answer.blanks[id] ?? ''}
             disabled={disabled}
@@ -165,7 +212,6 @@ export function QuestionAnswer({
     const options = gap && 'options' in gap ? gap.options : [];
     return (
       <label className="inline-answer">
-        Blank {index + 1}
         <SelectField
           disabled={disabled}
           value={answer.blanks[id] ?? ''}
@@ -204,25 +250,32 @@ export function QuestionAnswer({
     const next = [...order],
       [item] = next.splice(from, 1);
     next.splice(to, 0, item!);
-    onChange((old) => ({ ...old, orderedItemIds: next, confirmed: false }));
+    onChange((old) => ({ ...old, orderedItemIds: next }));
   }
   return (
     <section
       className="question mixed-question"
-      id={`question-${q.id}`}
+      id={anchorId ?? `question-${q.id}`}
       aria-label={`Question ${number}`}
     >
       <h3>
         <span className="question-number">{number}</span> {questionLabels[q.type]}{' '}
         <small>{q.points} pts</small>
       </h3>
+      {q.type !== 'RESPONSE' && typeof result?.score === 'number' && (
+        <p className="question-score" aria-label={`Automatic score for question ${number}`}>
+          <b>
+            Automatically graded · {result.score} / {result.maxScore} points
+          </b>
+        </p>
+      )}
       <ContentView content={q.prompt} token={token} blank={blank} />
       <ContentView content={q.answerAreaContent} token={token} />
       {q.type === 'SINGLE_CHOICE' && (
         <div role="radiogroup" aria-label={`Question ${number} options`}>
           {q.config.options.map((o, i) => (
             <div
-              className={`option ${teacher && 'answerKey' in q && q.answerKey.correctOptionId === o.id ? 'correct' : ''}`}
+              className={`option ${key?.type === 'SINGLE_CHOICE' && key.answerKey.correctOptionId === o.id ? 'correct' : ''}`}
               key={o.id}
             >
               <label>
@@ -230,16 +283,20 @@ export function QuestionAnswer({
                   type="radio"
                   aria-label={choiceLabel(o, i)}
                   disabled={disabled}
-                  name={q.id}
-                  checked={answer.optionId === o.id}
+                  name={`${choiceGroup}-${q.id}`}
+                  checked={
+                    key?.type === 'SINGLE_CHOICE'
+                      ? key.answerKey.correctOptionId === o.id
+                      : answer.optionId === o.id
+                  }
                   onChange={() => onChange((old) => ({ ...old, optionId: o.id }))}
                 />
                 <ContentView
                   content={o.content.filter((b) => b.type !== 'audio' && b.type !== 'image')}
                   token={token}
                 />{' '}
-                {teacher && 'answerKey' in q && q.answerKey.correctOptionId === o.id && (
-                  <small>Answer key</small>
+                {key?.type === 'SINGLE_CHOICE' && key.answerKey.correctOptionId === o.id && (
+                  <small className="answer-key-label">Answer key</small>
                 )}
               </label>
               <ContentView
@@ -250,198 +307,283 @@ export function QuestionAnswer({
           ))}
         </div>
       )}
-      {q.type === 'FILL_BLANK' && (
+      {q.type === 'FILL_BLANK' && !key && (
         <small>Enter a word or phrase (up to 200 characters) in every blank.</small>
       )}
       {q.type === 'CLOZE_CHOICE' &&
         q.config.blanks.map((gap, i) => (
-          <details key={gap.id}>
+          <details key={gap.id} open={key ? true : undefined}>
             <summary>View options for blank {i + 1}</summary>
             {gap.options.map((o, j) => (
               <div className="answer-card" key={o.id}>
                 <ContentView content={o.content} token={token} />
-                <Button
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => mapValue('blanks', gap.id, o.id)}
-                >
-                  Choose {choiceLabel(o, j)}
-                </Button>
+                {key?.type === 'CLOZE_CHOICE' ? (
+                  key.answerKey.answers.some(
+                    (a) => a.blankId === gap.id && a.optionId === o.id,
+                  ) && <span className="answer-key-label">Answer key</span>
+                ) : (
+                  <Button
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => mapValue('blanks', gap.id, o.id)}
+                  >
+                    Choose {choiceLabel(o, j)}
+                  </Button>
+                )}
               </div>
             ))}
           </details>
         ))}
       {q.type === 'GROUPING' && (
         <>
-          <div className="group-cards">{cards(q.config.groups)}</div>
-          {q.config.items.map((item, i) => (
-            <div className="answer-card" key={item.id}>
-              <ContentView content={item.content} token={token} />
-              <label>
-                Category for {choiceLabel(item, i)}
-                <SelectField
-                  aria-label={`Category for ${choiceLabel(item, i)}`}
-                  disabled={disabled}
-                  value={answer.placements[item.id] ?? ''}
-                  onChange={(selectedValue) => mapValue('placements', item.id, selectedValue)}
-                >
-                  <option value="">Not grouped</option>
-                  {q.config.groups.map((g, j) => (
-                    <option key={g.id} value={g.id}>
-                      {choiceLabel(g, j)}
-                    </option>
-                  ))}
-                </SelectField>
-              </label>
-            </div>
-          ))}
-        </>
-      )}
-      {q.type === 'MATCHING' && (
-        <>
-          <p>
-            {q.config.mode === 'ONE_TO_ONE'
-              ? 'Each right item can be used once.'
-              : 'Right items may be used more than once.'}{' '}
-            Select a left item, then a right item, or use the selectors.
-          </p>
-          <div className="matching-columns">
-            <div>
-              {q.config.left.map((item, i) => (
-                <div className="answer-card" key={item.id}>
-                  <Button
-                    type="button"
-                    aria-pressed={activeLeft === item.id}
-                    disabled={disabled}
-                    onClick={() => setActiveLeft(item.id)}
-                  >
-                    Select {choiceLabel(item, i)}
-                  </Button>
-                  <ContentView content={item.content} token={token} />
+          {!key && <div className="group-cards">{cards(q.config.groups)}</div>}
+          {q.config.items.map((item, i) => {
+            const group =
+              key?.type === 'GROUPING'
+                ? key.config.groups.find(
+                    (g) =>
+                      g.id === key.answerKey.placements.find((p) => p.itemId === item.id)?.groupId,
+                  )
+                : undefined;
+            return (
+              <div className="answer-card" key={item.id}>
+                <ContentView content={item.content} token={token} />
+                {key?.type === 'GROUPING' ? (
+                  <div className="inline-answer-key group-answer-key">
+                    <b>Answer key</b>
+                    <AnswerChoice choice={group} token={token} />
+                  </div>
+                ) : (
                   <label>
-                    Connect {choiceLabel(item, i)} to
+                    Category for {choiceLabel(item, i)}
                     <SelectField
-                      aria-label={`Connect ${choiceLabel(item, i)} to`}
+                      aria-label={`Category for ${choiceLabel(item, i)}`}
                       disabled={disabled}
-                      value={answer.pairs[item.id] ?? ''}
-                      onChange={(selectedValue) => pair(item.id, selectedValue)}
+                      value={answer.placements[item.id] ?? ''}
+                      onChange={(selectedValue) => mapValue('placements', item.id, selectedValue)}
                     >
-                      <option value="">Not connected</option>
-                      {q.config.right.map((right, j) => (
-                        <option
-                          key={right.id}
-                          value={right.id}
-                          disabled={
-                            q.config.mode === 'ONE_TO_ONE' &&
-                            Object.entries(answer.pairs).some(
-                              ([left, target]) => left !== item.id && target === right.id,
-                            )
-                          }
-                        >
-                          {choiceLabel(right, j)}
+                      <option value="">Not grouped</option>
+                      {q.config.groups.map((g, j) => (
+                        <option key={g.id} value={g.id}>
+                          {choiceLabel(g, j)}
                         </option>
                       ))}
                     </SelectField>
                   </label>
-                </div>
-              ))}
-            </div>
-            <div>
-              {q.config.right.map((item, i) => (
-                <div className="answer-card" key={item.id}>
-                  <Button
-                    type="button"
-                    disabled={disabled || !activeLeft}
-                    onClick={() => {
-                      if (activeLeft) pair(activeLeft, item.id);
-                    }}
-                  >
-                    Connect to {choiceLabel(item, i)}
-                  </Button>
-                  <ContentView content={item.content} token={token} />
-                </div>
-              ))}
-            </div>
-          </div>
-          {hint && <p role="status">{hint}</p>}
+                )}
+              </div>
+            );
+          })}
         </>
       )}
-      {q.type === 'ORDERING' && (
-        <>
-          <ol className="ordering-list">
-            {order.map((id, index) => {
-              const card = q.config.items.find((i) => i.id === id);
-              return card ? (
-                <li key={id}>
-                  <ContentView content={card.content} token={token} />
-                  <div className="inline-actions">
+      {q.type === 'MATCHING' &&
+        (key?.type === 'MATCHING' ? (
+          <div className="matching-answer-key">
+            {key.config.left.map((item) => {
+              const target = key.config.right.find(
+                (r) => r.id === key.answerKey.pairs.find((p) => p.leftId === item.id)?.rightId,
+              );
+              return (
+                <div className="answer-card" key={item.id}>
+                  <ContentView content={item.content} token={token} />
+                  <div className="inline-answer-key">
+                    <b>Answer key</b>
+                    <AnswerChoice choice={target} token={token} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <>
+            <p>
+              {q.config.mode === 'ONE_TO_ONE'
+                ? 'Each right item can be used once.'
+                : 'Right items may be used more than once.'}{' '}
+              Select a left item, then a right item, or use the selectors.
+            </p>
+            <div className="matching-columns">
+              <div>
+                {q.config.left.map((item, i) => (
+                  <div
+                    className="answer-card matching-card"
+                    key={item.id}
+                    data-paired={!!answer.pairs[item.id] || undefined}
+                    data-active={activeLeft === item.id || undefined}
+                  >
                     <Button
                       type="button"
-                      disabled={disabled || !index}
-                      aria-label={`Move ${choiceLabel(card, index)} up`}
-                      onClick={() => move(index, index - 1)}
+                      aria-pressed={activeLeft === item.id}
+                      disabled={disabled}
+                      onClick={() => {
+                        setActiveLeft(item.id);
+                        setHint('');
+                      }}
                     >
-                      ↑ Up
+                      Select {choiceLabel(item, i)}
                     </Button>
-                    <Button
-                      type="button"
-                      disabled={disabled || index === order.length - 1}
-                      aria-label={`Move ${choiceLabel(card, index)} down`}
-                      onClick={() => move(index, index + 1)}
-                    >
-                      ↓ Down
-                    </Button>
+                    <ContentView content={item.content} token={token} />
                     <label>
-                      Position
+                      Connect {choiceLabel(item, i)} to
                       <SelectField
-                        aria-label="Position"
+                        aria-label={`Connect ${choiceLabel(item, i)} to`}
                         disabled={disabled}
-                        value={index}
-                        onChange={(selectedValue) => move(index, Number(selectedValue))}
+                        value={answer.pairs[item.id] ?? ''}
+                        onChange={(selectedValue) => pair(item.id, selectedValue)}
                       >
-                        {order.map((_, j) => (
-                          <option key={j} value={j}>
-                            {j + 1}
+                        <option value="">Not connected</option>
+                        {q.config.right.map((right, j) => (
+                          <option
+                            key={right.id}
+                            value={right.id}
+                            disabled={
+                              q.config.mode === 'ONE_TO_ONE' &&
+                              Object.entries(answer.pairs).some(
+                                ([left, target]) => left !== item.id && target === right.id,
+                              )
+                            }
+                          >
+                            {choiceLabel(right, j)}
                           </option>
                         ))}
                       </SelectField>
                     </label>
                   </div>
-                </li>
-              ) : null;
-            })}
-          </ol>
-          <Button
-            type="button"
-            disabled={disabled || !order.length}
-            onClick={() => onChange((old) => ({ ...old, orderedItemIds: order, confirmed: true }))}
-          >
-            Confirm this order
-          </Button>
-          <p role="status">
-            {answer.confirmed ? 'Order confirmed.' : 'Confirm your order before submitting.'}
-          </p>
-        </>
-      )}
+                ))}
+              </div>
+              <div>
+                {q.config.right.map((item, i) => (
+                  <div
+                    className="answer-card matching-card"
+                    key={item.id}
+                    data-paired={Object.values(answer.pairs).includes(item.id) || undefined}
+                    data-active={
+                      (!!activeLeft && answer.pairs[activeLeft] === item.id) || undefined
+                    }
+                  >
+                    <Button
+                      type="button"
+                      disabled={disabled || !activeLeft}
+                      onClick={() => {
+                        if (activeLeft) pair(activeLeft, item.id);
+                      }}
+                    >
+                      Connect to {choiceLabel(item, i)}
+                    </Button>
+                    <ContentView content={item.content} token={token} />
+                  </div>
+                ))}
+              </div>
+            </div>
+            {hint && <p role="status">{hint}</p>}
+          </>
+        ))}
+      {q.type === 'ORDERING' &&
+        (key?.type === 'ORDERING' ? (
+          <div className="ordering-answer-key">
+            {key.answerKey.orders.length ? (
+              key.answerKey.orders.map((ids, index) => (
+                <div key={index}>
+                  <b>
+                    {key.answerKey.orders.length === 1
+                      ? 'Answer key'
+                      : `Acceptable order ${index + 1}`}
+                  </b>
+                  <ol className="ordering-list">
+                    {ids.map((id) => {
+                      const item = key.config.items.find((item) => item.id === id);
+                      return item ? (
+                        <li key={id}>
+                          <AnswerChoice choice={item} token={token} />
+                        </li>
+                      ) : null;
+                    })}
+                  </ol>
+                </div>
+              ))
+            ) : (
+              <p>Answer key: Not set</p>
+            )}
+          </div>
+        ) : (
+          <>
+            <ol className="ordering-list">
+              {order.map((id, index) => {
+                const card = q.config.items.find((i) => i.id === id);
+                return card ? (
+                  <li key={id}>
+                    <ContentView content={card.content} token={token} />
+                    <div className="inline-actions">
+                      <Button
+                        type="button"
+                        disabled={disabled || !index}
+                        aria-label={`Move ${choiceLabel(card, index)} up`}
+                        onClick={() => move(index, index - 1)}
+                      >
+                        ↑ Up
+                      </Button>
+                      <Button
+                        type="button"
+                        disabled={disabled || index === order.length - 1}
+                        aria-label={`Move ${choiceLabel(card, index)} down`}
+                        onClick={() => move(index, index + 1)}
+                      >
+                        ↓ Down
+                      </Button>
+                      <label>
+                        Position
+                        <SelectField
+                          aria-label="Position"
+                          disabled={disabled}
+                          value={index}
+                          onChange={(selectedValue) => move(index, Number(selectedValue))}
+                        >
+                          {order.map((_, j) => (
+                            <option key={j} value={j}>
+                              {j + 1}
+                            </option>
+                          ))}
+                        </SelectField>
+                      </label>
+                    </div>
+                  </li>
+                ) : null;
+              })}
+            </ol>
+          </>
+        ))}
       {q.type === 'RESPONSE' && (
         <>
-          <p>
-            {q.config.textRequired ? 'Text required. ' : ''}Images: {q.config.minImages}–
-            {q.config.maxImages}; audio: {q.config.minAudios}–{q.config.maxAudios}. Your teacher
-            will grade this response.
-          </p>
-          {q.config.textEnabled && (
-            <label>
-              Your response
-              <TextAreaField
-                aria-label="Your response"
-                disabled={disabled}
-                rows={4}
-                value={answer.text}
-                onChange={(e) => onChange((old) => ({ ...old, text: e.target.value }))}
-              />
-              <small>{[...answer.text].length} / 2000 characters</small>
-            </label>
+          {key?.type === 'RESPONSE' ? (
+            <div className="reference-answer">
+              <b>Reference answer</b>
+              {key.answerKey.referenceText && <p>{key.answerKey.referenceText}</p>}
+              <ContentView content={key.answerKey.referenceContent} token={token} />
+              {!key.answerKey.referenceText && !key.answerKey.referenceContent.length && (
+                <p>Not set</p>
+              )}
+            </div>
+          ) : (
+            <>
+              <p>
+                {q.config.textRequired ? 'Text required. ' : ''}Images: {q.config.minImages}–
+                {q.config.maxImages}; audio: {q.config.minAudios}–{q.config.maxAudios}. Your teacher
+                will grade this response.
+              </p>
+              {q.config.textEnabled && (
+                <label>
+                  Your response
+                  <TextAreaField
+                    aria-label="Your response"
+                    disabled={disabled}
+                    rows={4}
+                    value={answer.text}
+                    onChange={(e) => onChange((old) => ({ ...old, text: e.target.value }))}
+                  />
+                  <small>{[...answer.text].length} / 2000 characters</small>
+                </label>
+              )}
+            </>
           )}
           <details>
             <summary>Assessment criteria</summary>
@@ -456,6 +598,24 @@ export function QuestionAnswer({
             ))}
           </details>
         </>
+      )}
+      {key?.explanation && (
+        <p className="question-explanation">
+          <b>Explanation</b>
+          <br />
+          {key.explanation}
+        </p>
+      )}
+      {q.type !== 'RESPONSE' && result && result.units.length > 1 && (
+        <details>
+          <summary>Scoring details</summary>
+          {result.units.map((unit, index) => (
+            <p key={unit.unitId}>
+              Item {index + 1}: {unit.correct ? 'Correct' : 'Incorrect'} · {unit.score} /{' '}
+              {unit.points} points
+            </p>
+          ))}
+        </details>
       )}
       {(q.type === 'RESPONSE' || q.evidenceEnabled) && (
         <div className="answer-attachments">
@@ -523,6 +683,7 @@ export function QuestionAnswer({
             )}
         </div>
       )}
+      {children}
     </section>
   );
 }

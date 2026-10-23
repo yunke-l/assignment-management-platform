@@ -22,7 +22,9 @@ export async function usableInvitation(tx: Connection, token: string, email: str
     [digest(token)],
   );
   if (!invitation)
-    throw new BadRequestException('Invitation is invalid, expired, revoked or fully used.');
+    throw new BadRequestException(
+      'Invitation is invalid, expired, revoked or fully used. Ask your teacher or administrator for a new code.',
+    );
   if (invitation.email && invitation.email !== email)
     throw new ForbiddenException('This invitation is for a different email address.');
   return invitation;

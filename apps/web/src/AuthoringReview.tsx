@@ -1,7 +1,7 @@
 import { Button } from './Controls';
 import type { RefObject } from 'react';
 import type { QuestionV2, ValidationProblem } from '@amp/contracts';
-import { questionNumbers, unitPoints } from './question-editor';
+import { questionNumbers, questionsInDisplayOrder, unitPoints } from './question-editor';
 import { focusProblem, problemFieldLabel } from './QuestionValidation';
 
 export type CheckPhase = 'idle' | 'checking' | 'checked' | 'stale' | 'failed';
@@ -33,9 +33,7 @@ export function AuthoringReview({
   // The persisted array can interleave children from different groups. Follow
   // the same parent/child traversal used to number the editor instead.
   const order = new Map([...numbers.keys()].map((id, index) => [id, index]));
-  const leaves = questions
-    .filter((q) => q.type !== 'COMPOSITE')
-    .sort((a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity));
+  const leaves = questionsInDisplayOrder(questions).filter((q) => q.type !== 'COMPOSITE');
   const groups = new Map<string, ValidationProblem[]>();
   problems.forEach((p) => {
     const key = p.questionId ?? '';

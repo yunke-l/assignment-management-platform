@@ -161,7 +161,7 @@ export function TextAreaField({ className, ...props }: ComponentProps<'textarea'
 export function Button({ className = '', type = 'submit', ...props }: ComponentProps<'button'>) {
   // Navigation, content cards and media buttons keep their structural layout.
   if (
-    /\b(nav-link|nav-current|assignment-row|media-image-button|question-issue-link|text-button|score-link)\b/.test(
+    /\b(nav-link|nav-current|profile|assignment-row|media-image-button|question-issue-link|text-button|score-link)\b/.test(
       className,
     )
   )

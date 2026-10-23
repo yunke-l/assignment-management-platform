@@ -2,6 +2,7 @@ import { FormFieldset } from './Controls';
 import { useState, type FormEvent } from 'react';
 import { Alert, Button, TextInput } from '@mantine/core';
 import type { Actor } from '@amp/contracts';
+import { inviteTokenSchema } from '@amp/contracts';
 import { request } from './api';
 import { Brand, Owl } from './Owl';
 import { useConfirm } from './ConfirmDialog';
@@ -19,6 +20,7 @@ export function Login({
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [invitation, setInvitation] = useState('');
+  const [invitationError, setInvitationError] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -26,8 +28,16 @@ export function Login({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (busy) return;
-    setBusy(true);
+    setInvitationError('');
     setError('');
+    if (registering) {
+      const result = inviteTokenSchema.safeParse(invitation);
+      if (!result.success) {
+        setInvitationError(result.error.issues[0]!.message);
+        return;
+      }
+    }
+    setBusy(true);
     try {
       const result = await request<Session>(
         registering ? '/auth/register' : '/auth/login',
@@ -52,16 +62,6 @@ export function Login({
     <main className="login-layout">
       <section className="intro">
         <Brand />
-        <span className="eyebrow">SMALL STEPS. BRIGHT IDEAS.</span>
-        <h1>
-          A little curiosity.
-          <br />
-          <span>A world of possibility.</span>
-        </h1>
-        <p>
-          A calmer place to teach. A brighter place to learn. Bring your classroom together, one
-          good question at a time.
-        </p>
         <div className="owl-scene">
           <div className="scene-halo" />
           <span className="scene-spark spark-one" aria-hidden="true">
@@ -73,32 +73,11 @@ export function Login({
           <span className="scene-leaf leaf-one" aria-hidden="true" />
           <span className="scene-leaf leaf-two" aria-hidden="true" />
           <Owl label="Ollie the owl reading a book" />
-          <span className="owl-caption">Meet Ollie. Big on little discoveries.</span>
-        </div>
-        <div className="intro-path">
-          <span>
-            <span className="path-number">01</span>
-            <b>Create</b>
-          </span>
-          <i>→</i>
-          <span>
-            <span className="path-number">02</span>
-            <b>Submit</b>
-          </span>
-          <i>→</i>
-          <span>
-            <span className="path-number">03</span>
-            <b>Review</b>
-          </span>
         </div>
       </section>
       <section className="login-panel">
         <div className="login-card">
-          <span className="login-greeting">
-            A good day to learn <span aria-hidden="true">✦</span>
-          </span>
-          <span className="eyebrow">YOUR LEARNING WORKSPACE</span>
-          <h2>{registering ? 'Join your workspace.' : 'Welcome back.'}</h2>
+          <h2>{registering ? 'Create account' : 'Sign in'}</h2>
           <p className="muted">
             {registering
               ? 'Use the invitation supplied by your teacher or administrator.'
@@ -119,10 +98,17 @@ export function Login({
                   />
                   <TextInput
                     label="Invitation code"
+                    description="Ask your teacher or administrator for a code, then paste the full 43-character code here."
+                    error={
+                      invitationError ? <span role="alert">{invitationError}</span> : undefined
+                    }
                     required
                     autoComplete="off"
                     value={invitation}
-                    onChange={(e) => setInvitation(e.target.value)}
+                    onChange={(e) => {
+                      setInvitation(e.target.value);
+                      setInvitationError('');
+                    }}
                   />
                 </>
               )}
@@ -176,6 +162,7 @@ export function Login({
                 return;
               setRegistering((v) => !v);
               setError('');
+              setInvitationError('');
               setPassword('');
             }}
           >
@@ -183,7 +170,6 @@ export function Login({
               ? 'Already have an account? Sign in'
               : 'Have an invitation? Create an account'}
           </Button>
-          <p className="login-footnote">A little focus. A lot of possibility.</p>
         </div>
       </section>
     </main>
@@ -218,7 +204,6 @@ export function AccountPanel({ onChanged }: { onChanged: () => void }) {
     <>
       <section className="page-heading compact-heading">
         <div>
-          <span className="eyebrow">YOUR OWN LITTLE CORNER</span>
           <h1>Your account</h1>
           <p className="muted">Keep your sign-in details up to date.</p>
         </div>

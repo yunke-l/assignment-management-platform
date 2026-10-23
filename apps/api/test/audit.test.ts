@@ -53,6 +53,36 @@ test('malformed JSON is a traceable client error', async () => {
   const response = await http.post('/api/auth/login').type('json').send('{"invalid":').expect(400);
   assert.equal(response.body.requestId, response.headers['x-request-id']);
 });
+test('HTTP validation explains fields without exposing validator rules or internal paths', async () => {
+  const cases = [
+    {
+      path: '/api/auth/login',
+      input: { email: 'invalid', password: '' },
+      expected: /valid email address/,
+    },
+    { path: '/api/classes', input: { name: '' }, expected: /Name: enter a value/ },
+    {
+      path: '/api/assignments',
+      input: { ...assignment(), title: 'x'.repeat(121), dueAt: 'yesterday' },
+      expected: /Title: use at most 120 characters/,
+    },
+    {
+      path: `/api/classes/${ids.classroom}/invitations`,
+      input: { maxUses: 101 },
+      expected: /Invitation usage limit: enter a number at most 100/,
+    },
+    { path: '/api/assets/uploads', input: { bytes: 0 }, expected: /File size/ },
+  ];
+  for (const { path, input, expected } of cases) {
+    const response = await http.post(path).set('Authorization', auth).send(input).expect(400);
+    assert.match(response.body.message, expected);
+    assert.doesNotMatch(
+      response.body.message,
+      /Invalid input|expected |received |Too (?:big|small)|Unrecognized|must match pattern|\^\[|UUID|classId|dueAt|maxUses/,
+    );
+    assert.equal(response.body.requestId, response.headers['x-request-id']);
+  }
+});
 test('oversized JSON returns 413 rather than an internal-server error', async () => {
   const response = await http
     .post('/api/auth/login')

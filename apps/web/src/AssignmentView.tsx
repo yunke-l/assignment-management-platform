@@ -1,5 +1,5 @@
 import { Button, SelectField, FormFieldset, InputField, TextAreaField } from './Controls';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   canonicalSubmission,
   mediaLimits,
@@ -22,16 +22,16 @@ import {
   emptyAnswer,
   QuestionAnswer,
   restoreAnswer,
-  choiceLabel,
   type DraftAnswer,
 } from './QuestionAnswer';
 import { useConfirm } from './ConfirmDialog';
 import { compatibleDraft } from './answer-draft';
 import { recoverStudentDraft, type AnswerWork } from './work-migration';
 import { LegacyWorkNotice } from './LegacyWorkNotice';
-import { questionNumbers } from './question-editor';
+import { questionNumbers, questionsInDisplayOrder } from './question-editor';
 import { attachmentCapacity, checkAttachmentAddition } from './answer-capacity';
 import { useWork, useWorkDraft, useWorkGuard } from './WorkProtection';
+import { QuestionAnalysis, type QuestionAnalysisItem } from './QuestionAnalysis';
 export type StatsV2 = AssignmentStats & { pendingReviewCount: number; gradedCount: number };
 type AnswerResult = {
   questionId: string;
@@ -57,90 +57,11 @@ type SubmissionDetail = SubmissionV2 & {
 };
 const dateLabel = (value: string) => new Date(value).toLocaleString();
 type AnyQuestion = QuestionV2 | PublicQuestionV2;
-export function TeacherKey({ q, token }: { q: QuestionV2; token: string }) {
-  let content;
-  switch (q.type) {
-    case 'COMPOSITE':
-      return null;
-    case 'SINGLE_CHOICE':
-      content = (
-        <p>
-          Correct option:{' '}
-          {q.config.options.find((o) => o.id === q.answerKey.correctOptionId)
-            ? choiceLabel(q.config.options.find((o) => o.id === q.answerKey.correctOptionId)!)
-            : 'Not set'}
-        </p>
-      );
-      break;
-    case 'FILL_BLANK':
-      content = q.config.blanks.map((b, i) => (
-        <p key={b.id}>
-          Blank {i + 1}:{' '}
-          {q.answerKey.answers.find((a) => a.blankId === b.id)?.values.join(' / ') || 'Not set'} ·{' '}
-          {b.points} pts · {b.caseSensitive ? 'case sensitive' : 'ignores ASCII case'}
-        </p>
-      ));
-      break;
-    case 'CLOZE_CHOICE':
-      content = q.config.blanks.map((b, i) => {
-        const id = q.answerKey.answers.find((a) => a.blankId === b.id)?.optionId,
-          option = b.options.find((o) => o.id === id);
-        return (
-          <p key={b.id}>
-            Blank {i + 1}: {option ? choiceLabel(option) : 'Not set'} · {b.points} pts
-          </p>
-        );
-      });
-      break;
-    case 'GROUPING':
-      content = q.config.items.map((item, i) => {
-        const group = q.config.groups.find(
-          (g) => g.id === q.answerKey.placements.find((p) => p.itemId === item.id)?.groupId,
-        );
-        return (
-          <p key={item.id}>
-            {choiceLabel(item, i)} → {group ? choiceLabel(group) : 'Not set'}
-          </p>
-        );
-      });
-      break;
-    case 'MATCHING':
-      content = q.config.left.map((item, i) => {
-        const target = q.config.right.find(
-          (r) => r.id === q.answerKey.pairs.find((p) => p.leftId === item.id)?.rightId,
-        );
-        return (
-          <p key={item.id}>
-            {choiceLabel(item, i)} → {target ? choiceLabel(target) : 'Not set'}
-          </p>
-        );
-      });
-      break;
-    case 'ORDERING':
-      content = q.answerKey.orders.map((order, i) => (
-        <p key={i}>
-          Acceptable order {i + 1}:{' '}
-          {order.map((id) => choiceLabel(q.config.items.find((c) => c.id === id)!)).join(' → ')}
-        </p>
-      ));
-      break;
-    case 'RESPONSE':
-      content = (
-        <>
-          <p>{q.answerKey.referenceText}</p>
-          <ContentView token={token} content={q.answerKey.referenceContent} />
-        </>
-      );
-      break;
-  }
-  return (
-    <details className="teacher-key">
-      <summary>Teacher answer configuration</summary>
-      {content}
-      {q.explanation && <p>{q.explanation}</p>}
-    </details>
-  );
-}
+type ReviewDirectory = {
+  anchorPrefix: string;
+  items: Record<string, { score: number | null; status: 'pending' | 'draft' | 'graded' }>;
+};
+type ReviewDirectoryChange = (directory: ReviewDirectory | null) => void;
 function QuestionTree({
   questions,
   token,
@@ -148,6 +69,10 @@ function QuestionTree({
   edit,
   disabled,
   teacher,
+  showAnswerKey = teacher,
+  results,
+  anchorPrefix = 'question',
+  renderGrading,
   assignmentId,
   onStatus,
   onUploadBusy,
@@ -159,17 +84,23 @@ function QuestionTree({
   edit: (id: string, change: (old: DraftAnswer) => DraftAnswer) => void;
   disabled: boolean;
   teacher: boolean;
+  showAnswerKey?: boolean;
+  results?: AnswerResult[];
+  anchorPrefix?: string;
+  renderGrading?: (question: Exclude<AnyQuestion, { type: 'COMPOSITE' }>) => ReactNode;
   assignmentId?: string;
   onStatus?: (id: string, asset: AssetView | null) => void;
   onUploadBusy?: (key: string, busy: boolean) => void;
   canUpload?: (id: string, kind: 'image' | 'audio', bytes: number) => string | null;
 }) {
-  const [current, setCurrent] = useState<string | null>(null);
-  const leaf = (q: AnyQuestion, number: string) =>
-    q.type === 'COMPOSITE' ? null : (
-      <div key={q.id} onFocusCapture={() => setCurrent(q.id)}>
+  const leaf = (q: AnyQuestion, number: string) => {
+    if (q.type === 'COMPOSITE') return null;
+    const result = results?.find((result) => result.questionId === q.id);
+    return (
+      <div key={q.id}>
         <QuestionAnswer
           q={q}
+          anchorId={`${anchorPrefix}-${q.id}`}
           token={token}
           number={number}
           assignmentId={assignmentId}
@@ -177,13 +108,23 @@ function QuestionTree({
           onChange={(action) => edit(q.id, action)}
           disabled={disabled}
           teacher={teacher}
+          showAnswerKey={showAnswerKey}
+          result={
+            result && {
+              score: result.score ?? null,
+              maxScore: result.maxScore ?? q.points,
+              units: result.units ?? [],
+            }
+          }
           onStatus={onStatus}
           onUploadBusy={onUploadBusy}
           canUpload={canUpload}
-        />
-        {teacher && 'answerKey' in q && <TeacherKey q={q} token={token} />}
+        >
+          {renderGrading?.(q)}
+        </QuestionAnswer>
       </div>
     );
+  };
   return (
     <div>
       {questions
@@ -200,7 +141,6 @@ function QuestionTree({
                   <summary>Shared materials · expand / collapse</summary>
                   <ContentView token={token} content={root.prompt} />
                   <ContentView token={token} content={root.answerAreaContent} />
-                  {current && <a href={`#question-${current}`}>Return to current question</a>}
                 </details>
                 <div>
                   {questions
@@ -244,6 +184,7 @@ export function AssignmentView({
     [error, setError] = useState(''),
     [issues, setIssues] = useState<ValidationProblem[]>([]),
     [confirmDelete, setConfirmDelete] = useState(false);
+  const [reviewDirectory, setReviewDirectory] = useState<ReviewDirectory | null>(null);
   const [metadata, setMetadata] = useState<Record<string, AssetView | null>>({}),
     [uploading, setUploading] = useState<Record<string, boolean>>({});
   const onStatus = useCallback(
@@ -304,7 +245,9 @@ export function AssignmentView({
     if (assignment.submission && dirty) clear();
   }, [assignment.submission, dirty, clear]);
   const numbers = questionNumbers(assignment.questions);
-  const leaves = assignment.questions.filter((q) => q.type !== 'COMPOSITE');
+  const leaves = questionsInDisplayOrder(assignment.questions).filter(
+    (q) => q.type !== 'COMPOSITE',
+  );
   const answers = leaves.flatMap((q) => {
     const answer = actualAnswer(q, draft.answers[q.id] ?? emptyAnswer());
     return answer ? [answer] : [];
@@ -506,8 +449,8 @@ export function AssignmentView({
           {assignment.submission.gradingStatus === 'PENDING_REVIEW' &&
             assignment.submission.objectiveMaxScore > 0 && (
               <p>
-                Objective questions: {assignment.submission.objectiveScore}/
-                {assignment.submission.objectiveMaxScore}. Final grade pending.
+                Automatically graded: {assignment.submission.objectiveScore} /{' '}
+                {assignment.submission.objectiveMaxScore} points. Final grade pending.
               </p>
             )}
           <p>{dateLabel(assignment.submission.submittedAt)}</p>
@@ -526,124 +469,156 @@ export function AssignmentView({
       {!teacher && !assignment.submission && (
         <UploadWorkspace assignmentId={assignment.id} token={token} />
       )}
-      <nav className="question-directory" aria-label="Question directory">
-        {leaves.map((q) => (
-          <a key={q.id} href={`#question-${q.id}`}>
-            {numbers.get(q.id)}
-            {!teacher &&
-            !assignment.submission &&
-            actualAnswer(q, draft.answers[q.id] ?? emptyAnswer())
-              ? ' ✓'
-              : ''}
-          </a>
-        ))}
-      </nav>
-      <QuestionTree
-        questions={assignment.questions}
-        token={token}
-        answers={assignment.submission ? savedAnswers : draft.answers}
-        edit={(id, change) =>
-          setDraft((old) => ({
-            ...old,
-            answers: {
-              ...old.answers,
-              [id]: change(
-                compatibleDraft(
-                  assignment.questions.find((q) => q.id === id)!,
-                  old.answers[id] ?? emptyAnswer(),
-                ),
-              ),
-            },
-          }))
-        }
-        disabled={teacher || !!assignment.submission || closed || busy}
-        teacher={teacher}
-        assignmentId={assignment.id}
-        onStatus={onStatus}
-        onUploadBusy={onUploadBusy}
-        canUpload={(id, kind, size) =>
-          checkAttachmentAddition(assignment.questions, draft.answers, metadata, id, kind, size)
-        }
-      />
-      {submitted.loading && <p role="status">Loading saved answers…</p>}
-      {submitted.error && <p role="alert">{submitted.error}</p>}
-      {!teacher &&
-        submitted.data?.results.map((r) =>
-          r.feedback ? (
-            <p className="published-feedback" key={r.questionId}>
-              Teacher feedback: {r.feedback}
-            </p>
-          ) : null,
-        )}
-      {issues.map((issue, i) => (
-        <p className="error" role="alert" key={i}>
-          {issue.message}
-          {issue.questionId && <a href={`#question-${issue.questionId}`}> Go to question</a>}
-        </p>
-      ))}
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
-      {teacher && assignment.status === 'PUBLISHED' && (
-        <SubmissionReport
-          assignment={assignment}
-          token={token}
-          onChange={onChange}
-          resumeReview={resumeReview}
-        />
-      )}
-      {teacher && assignment.status === 'DRAFT' && (
-        <>
-          <div className="draft-actions">
-            <Button className="secondary" disabled={busy} onClick={onEdit}>
-              Edit draft
-            </Button>
-            <Button
-              className="secondary danger"
-              disabled={busy}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete draft
-            </Button>
-            {confirmDelete && (
-              <div role="alert">
-                <p>Delete this draft and its questions?</p>
-                <Button disabled={busy} onClick={() => setConfirmDelete(false)}>
-                  Keep draft
-                </Button>
-                <Button disabled={busy} onClick={() => void remove()}>
-                  Confirm delete
-                </Button>
-              </div>
+      <div className="assignment-reading-layout">
+        <nav className="question-directory" aria-label="Question directory">
+          {leaves.map((q) => {
+            const grade = reviewDirectory?.items[q.id];
+            const label = grade
+              ? grade.status === 'pending'
+                ? 'Not graded'
+                : `${grade.score} / ${q.points} points${grade.status === 'draft' ? ' · Draft' : ''}`
+              : '';
+            return (
+              <a
+                key={q.id}
+                href={`#${reviewDirectory?.anchorPrefix ?? 'question'}-${q.id}`}
+                title={`Question ${numbers.get(q.id)}${label ? ` · ${label}` : ''}`}
+                aria-label={grade ? `Question ${numbers.get(q.id)} · ${label}` : undefined}
+                data-grading-status={grade?.status}
+              >
+                <span>
+                  {numbers.get(q.id)}
+                  {!teacher &&
+                  !assignment.submission &&
+                  actualAnswer(q, draft.answers[q.id] ?? emptyAnswer())
+                    ? ' ✓'
+                    : ''}
+                </span>
+                {grade && (
+                  <span
+                    className="directory-score"
+                    data-below-full={
+                      grade.status !== 'pending' && grade.score !== null && grade.score < q.points
+                    }
+                  >
+                    {grade.status === 'pending' ? 'Not graded' : `${grade.score} / ${q.points}`}
+                  </span>
+                )}
+                {grade?.status === 'draft' && <span className="directory-score">Draft</span>}
+              </a>
+            );
+          })}
+        </nav>
+        <div className="assignment-reading-content">
+          <QuestionTree
+            questions={assignment.questions}
+            token={token}
+            answers={assignment.submission ? savedAnswers : draft.answers}
+            edit={(id, change) =>
+              setDraft((old) => ({
+                ...old,
+                answers: {
+                  ...old.answers,
+                  [id]: change(
+                    compatibleDraft(
+                      assignment.questions.find((q) => q.id === id)!,
+                      old.answers[id] ?? emptyAnswer(),
+                    ),
+                  ),
+                },
+              }))
+            }
+            disabled={teacher || !!assignment.submission || closed || busy}
+            teacher={teacher}
+            assignmentId={assignment.id}
+            onStatus={onStatus}
+            onUploadBusy={onUploadBusy}
+            canUpload={(id, kind, size) =>
+              checkAttachmentAddition(assignment.questions, draft.answers, metadata, id, kind, size)
+            }
+          />
+          {submitted.loading && <p role="status">Loading saved answers…</p>}
+          {submitted.error && <p role="alert">{submitted.error}</p>}
+          {!teacher &&
+            submitted.data?.results.map((r) =>
+              r.feedback ? (
+                <p className="published-feedback" key={r.questionId}>
+                  Teacher feedback: {r.feedback}
+                </p>
+              ) : null,
             )}
-          </div>
-          <Button
-            className="primary wide"
-            disabled={busy || closed || !!work.entries[`assignment:${assignment.id}`]}
-            onClick={() => void act('publish')}
-          >
-            {busy ? 'Publishing…' : 'Publish to class →'}
-          </Button>
-        </>
-      )}
-      {!teacher && !assignment.submission && (
-        <>
-          <p className="footnote">
-            {dirty ? 'Your answers are kept in this tab, but have not been submitted. ' : ''}One
-            attempt. Review your answers before submitting.
-            {!work.storageAvailable && ' Browser storage is unavailable. Keep this page open.'}
-          </p>
-          <Button
-            className="primary wide"
-            disabled={busy || closed || !complete}
-            onClick={() => void act('submit')}
-          >
-            {closed ? 'Deadline passed' : busy ? 'Submitting…' : 'Submit answers →'}
-          </Button>
-        </>
-      )}
+          {issues.map((issue, i) => (
+            <p className="error" role="alert" key={i}>
+              {issue.message}
+              {issue.questionId && <a href={`#question-${issue.questionId}`}> Go to question</a>}
+            </p>
+          ))}
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          {teacher && assignment.status === 'PUBLISHED' && (
+            <SubmissionReport
+              assignment={assignment}
+              token={token}
+              onChange={onChange}
+              resumeReview={resumeReview}
+              onReviewDirectoryChange={setReviewDirectory}
+            />
+          )}
+          {teacher && assignment.status === 'DRAFT' && (
+            <>
+              <div className="draft-actions">
+                <Button className="secondary" disabled={busy} onClick={onEdit}>
+                  Edit draft
+                </Button>
+                <Button
+                  className="secondary danger"
+                  disabled={busy}
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  Delete draft
+                </Button>
+                {confirmDelete && (
+                  <div role="alert">
+                    <p>Delete this draft and its questions?</p>
+                    <Button disabled={busy} onClick={() => setConfirmDelete(false)}>
+                      Keep draft
+                    </Button>
+                    <Button disabled={busy} onClick={() => void remove()}>
+                      Confirm delete
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <Button
+                className="primary wide"
+                disabled={busy || closed || !!work.entries[`assignment:${assignment.id}`]}
+                onClick={() => void act('publish')}
+              >
+                {busy ? 'Publishing…' : 'Publish to class →'}
+              </Button>
+            </>
+          )}
+          {!teacher && !assignment.submission && (
+            <>
+              <p className="footnote">
+                {dirty ? 'Your answers are kept in this tab, but have not been submitted. ' : ''}One
+                attempt. Review your answers before submitting.
+                {!work.storageAvailable && ' Browser storage is unavailable. Keep this page open.'}
+              </p>
+              <Button
+                className="primary wide"
+                disabled={busy || closed || !complete}
+                onClick={() => void act('submit')}
+              >
+                {closed ? 'Deadline passed' : busy ? 'Submitting…' : 'Submit answers →'}
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -659,11 +634,13 @@ function SubmissionReport({
   token,
   onChange,
   resumeReview,
+  onReviewDirectoryChange,
 }: {
   assignment: AssignmentDetailV2;
   token: string;
   onChange: () => void;
   resumeReview?: { submissionId: string; request: number } | null;
+  onReviewDirectoryChange: ReviewDirectoryChange;
 }) {
   const [page, setPage] = useState(1),
     [status, setStatus] = useState(''),
@@ -677,16 +654,11 @@ function SubmissionReport({
     token,
     revision,
   );
-  const analysis = useResource<{
-    items: {
-      questionId: string;
-      type: string;
-      submitted: number;
-      graded: number;
-      averageScore: number | null;
-      units: { unitId: string; correctPercent: number | null }[];
-    }[];
-  }>(`/assignments/${assignment.id}/question-stats`, token, revision);
+  const analysis = useResource<{ items: QuestionAnalysisItem[] }>(
+    `/assignments/${assignment.id}/question-stats`,
+    token,
+    revision,
+  );
   return (
     <section className="submission-report">
       <h3>Student progress</h3>
@@ -742,6 +714,13 @@ function SubmissionReport({
                         : item.submission.gradingStatus === 'PENDING_REVIEW'
                           ? 'Pending review'
                           : `${item.submission.score} / ${item.submission.maxScore}`}
+                      {item.submission?.gradingStatus === 'PENDING_REVIEW' &&
+                        item.submission.objectiveMaxScore > 0 && (
+                          <small>
+                            Automatically graded: {item.submission.objectiveScore} /{' '}
+                            {item.submission.objectiveMaxScore} points
+                          </small>
+                        )}
                     </td>
                     <td>
                       {item.submission && (
@@ -772,6 +751,7 @@ function SubmissionReport({
           assignment={assignment}
           submissionId={selected}
           token={token}
+          onReviewDirectoryChange={onReviewDirectoryChange}
           onClose={() => setSelected(null)}
           onChange={() => {
             setRevision(revision + 1);
@@ -779,31 +759,12 @@ function SubmissionReport({
           }}
         />
       )}
-      <details>
-        <summary>Question analysis</summary>
-        {analysis.error && <p role="alert">{analysis.error}</p>}
-        {analysis.data?.items.map((item, i) => (
-          <div key={item.questionId}>
-            <b>
-              Question {i + 1} · {item.submitted} submitted
-            </b>
-            {item.type === 'RESPONSE' ? (
-              <p>
-                {item.graded} graded · Average:{' '}
-                {item.averageScore === null ? '—' : item.averageScore.toFixed(1)} pts
-              </p>
-            ) : (
-              item.units.map((unit, j) => (
-                <p key={unit.unitId}>
-                  Scoring unit {j + 1}:{' '}
-                  {unit.correctPercent === null ? '—' : `${unit.correctPercent.toFixed(1)}%`}{' '}
-                  correct
-                </p>
-              ))
-            )}
-          </div>
-        ))}
-      </details>
+      <QuestionAnalysis
+        questions={assignment.questions}
+        items={analysis.data?.items}
+        loading={analysis.loading}
+        error={analysis.error}
+      />
     </section>
   );
 }
@@ -813,12 +774,14 @@ function GradingReview({
   token,
   onClose,
   onChange,
+  onReviewDirectoryChange,
 }: {
   assignment: AssignmentDetailV2;
   submissionId: string;
   token: string;
   onClose: () => void;
   onChange: () => void;
+  onReviewDirectoryChange: ReviewDirectoryChange;
 }) {
   const [revision, setRevision] = useState(0);
   const result = useResource<SubmissionDetail>(
@@ -841,6 +804,7 @@ function GradingReview({
       submission={result.data}
       token={token}
       onClose={onClose}
+      onReviewDirectoryChange={onReviewDirectoryChange}
       onChange={() => {
         setRevision(revision + 1);
         onChange();
@@ -867,12 +831,14 @@ function GradeForm({
   token,
   onClose,
   onChange,
+  onReviewDirectoryChange,
 }: {
   assignment: AssignmentDetailV2;
   submission: SubmissionDetail;
   token: string;
   onClose: () => void;
   onChange: () => void;
+  onReviewDirectoryChange: ReviewDirectoryChange;
 }) {
   const initial = {
     schemaVersion: 2 as const,
@@ -925,6 +891,60 @@ function GradeForm({
   useWorkGuard(`grading-action:${submission.id}`, false, busy);
   const manual = assignment.questions.filter((q) => q.type === 'RESPONSE'),
     own = Object.fromEntries(submission.answers.map((a) => [a.questionId, restoreAnswer(a)]));
+  const anchorPrefix = `review-${submission.id}-question`;
+  useEffect(() => {
+    const items: ReviewDirectory['items'] = {};
+    for (const question of assignment.questions) {
+      if (question.type === 'COMPOSITE') continue;
+      const result = submission.results.find((result) => result.questionId === question.id);
+      if (question.type !== 'RESPONSE') {
+        items[question.id] = {
+          score: result?.score ?? null,
+          status: typeof result?.score === 'number' ? 'graded' : 'pending',
+        };
+        continue;
+      }
+      const draft = data.answers.find((answer) => answer.questionId === question.id);
+      const published = submission.gradingRevisions?.[0]?.data.find(
+        (answer) => answer.questionId === question.id,
+      );
+      const complete =
+        draft &&
+        question.config.rubric.every((dimension) => {
+          const score = draft.dimensions.find((item) => item.dimensionId === dimension.id)?.score;
+          return (
+            typeof score === 'number' &&
+            Number.isInteger(score) &&
+            score >= 0 &&
+            score <= dimension.points
+          );
+        });
+      items[question.id] = draft
+        ? {
+            score: complete
+              ? draft.dimensions.reduce((sum, dimension) => sum + dimension.score, 0)
+              : null,
+            status: !complete
+              ? 'pending'
+              : published && gradingFingerprint([draft]) === gradingFingerprint([published])
+                ? 'graded'
+                : 'draft',
+          }
+        : {
+            score: result?.score ?? null,
+            status: typeof result?.score === 'number' ? 'graded' : 'pending',
+          };
+    }
+    onReviewDirectoryChange({ anchorPrefix, items });
+  }, [
+    assignment.questions,
+    submission.results,
+    submission.gradingRevisions,
+    data.answers,
+    anchorPrefix,
+    onReviewDirectoryChange,
+  ]);
+  useEffect(() => () => onReviewDirectoryChange(null), [onReviewDirectoryChange]);
   function edit(
     id: string,
     change: (old: GradingDraft['answers'][number]) => GradingDraft['answers'][number],
@@ -1028,33 +1048,46 @@ function GradeForm({
         Submission review ·{' '}
         {submission.gradingStatus === 'GRADED'
           ? `${submission.score}/${submission.maxScore}`
-          : 'Pending'}
+          : 'Pending teacher review'}
       </h3>
-      <Button type="button" disabled={busy} onClick={onClose}>
-        Close review
-      </Button>
-      <Button
-        type="button"
-        disabled={busy}
-        onClick={async () => {
-          if (
-            !(await confirm({
-              title: 'Reload saved grading?',
-              description:
-                'Discard the grading inputs in this tab and load the latest server draft. Saved grades remain available in revision history.',
-              confirmLabel: 'Discard and reload',
-              cancelLabel: 'Keep reviewing',
-              danger: true,
-            }))
-          )
-            return;
-          clear();
-          onClose();
-          onChange();
-        }}
-      >
-        Reload saved grading
-      </Button>
+      {submission.objectiveMaxScore > 0 && (
+        <p className="result">
+          <b>
+            Automatically graded: {submission.objectiveScore} / {submission.objectiveMaxScore}{' '}
+            points
+          </b>
+          {submission.gradingStatus === 'PENDING_REVIEW' && (
+            <span> · Only response questions need teacher grading.</span>
+          )}
+        </p>
+      )}
+      <div className="inline-actions">
+        <Button type="button" disabled={busy} onClick={onClose}>
+          Close review
+        </Button>
+        <Button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            if (
+              !(await confirm({
+                title: 'Reload saved grading?',
+                description:
+                  'Discard the grading inputs in this tab and load the latest server draft. Saved grades remain available in revision history.',
+                confirmLabel: 'Discard and reload',
+                cancelLabel: 'Keep reviewing',
+                danger: true,
+              }))
+            )
+              return;
+            clear();
+            onClose();
+            onChange();
+          }}
+        >
+          Reload saved grading
+        </Button>
+      </div>
       {data.gradingVersion !== submission.gradingVersion &&
         data.gradingVersion < submission.gradingVersion && (
           <p role="alert">
@@ -1062,109 +1095,103 @@ function GradeForm({
             before resolving the conflict.
           </p>
         )}
-      <QuestionTree
-        questions={assignment.questions}
-        token={token}
-        answers={own}
-        edit={() => {}}
-        disabled
-        teacher
-      />
-      <details>
-        <summary>Automatic scoring details</summary>
-        {submission.results
-          .filter((r) => r.type !== 'RESPONSE')
-          .map((r) => (
-            <div key={r.questionId}>
-              <p>
-                {r.score}/{r.maxScore} pts
-              </p>
-              {r.units?.map((u, i) => (
-                <p key={u.unitId}>
-                  Unit {i + 1}: {u.correct ? 'Correct' : 'Incorrect'} · {u.score}/{u.points}
-                </p>
-              ))}
-            </div>
-          ))}
-      </details>
-      {manual.length > 0 && (
-        <form
-          ref={form}
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
-          <FormFieldset disabled={busy}>
-            {manual.map((q, i) => (
-              <div className="manual-grade" key={q.id}>
-                <h4>
-                  Response {i + 1} · {q.points} pts
-                </h4>
-                {q.config.rubric.map((d) => (
-                  <label key={d.id}>
-                    {d.name} (0–{d.points})
-                    <InputField
-                      aria-label={d.name}
-                      type="number"
-                      min={0}
-                      max={d.points}
-                      step={1}
-                      value={
-                        data.answers
-                          .find((a) => a.questionId === q.id)
-                          ?.dimensions.find((s) => s.dimensionId === d.id)?.score ?? ''
-                      }
-                      onChange={(e) =>
-                        edit(q.id, (old) => ({
-                          ...old,
-                          dimensions: [
-                            ...old.dimensions.filter((s) => s.dimensionId !== d.id),
-                            ...(e.target.value === ''
-                              ? []
-                              : [{ dimensionId: d.id, score: Number(e.target.value) }]),
-                          ],
-                        }))
-                      }
+      <form
+        ref={form}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <QuestionTree
+          questions={assignment.questions}
+          token={token}
+          answers={own}
+          edit={() => {}}
+          disabled
+          teacher
+          showAnswerKey={false}
+          results={submission.results}
+          anchorPrefix={anchorPrefix}
+          renderGrading={(q) => {
+            if (q.type !== 'RESPONSE') return null;
+            const i = manual.findIndex((question) => question.id === q.id);
+            return (
+              <FormFieldset disabled={busy}>
+                <div className="manual-grade" key={q.id}>
+                  <h4>
+                    Response {i + 1} · {q.points} pts
+                  </h4>
+                  {q.config.rubric.map((d) => (
+                    <label key={d.id}>
+                      {d.name} (0–{d.points})
+                      <InputField
+                        aria-label={d.name}
+                        type="number"
+                        min={0}
+                        max={d.points}
+                        step={1}
+                        value={
+                          data.answers
+                            .find((a) => a.questionId === q.id)
+                            ?.dimensions.find((s) => s.dimensionId === d.id)?.score ?? ''
+                        }
+                        onChange={(e) =>
+                          edit(q.id, (old) => ({
+                            ...old,
+                            dimensions: [
+                              ...old.dimensions.filter((s) => s.dimensionId !== d.id),
+                              ...(e.target.value === ''
+                                ? []
+                                : [{ dimensionId: d.id, score: Number(e.target.value) }]),
+                            ],
+                          }))
+                        }
+                      />
+                      <small>{d.description}</small>
+                    </label>
+                  ))}
+                  <label>
+                    Feedback for response {i + 1}
+                    <TextAreaField
+                      aria-label={`Feedback for response ${i + 1}`}
+                      value={data.answers.find((a) => a.questionId === q.id)?.feedback ?? ''}
+                      onChange={(e) => edit(q.id, (old) => ({ ...old, feedback: e.target.value }))}
                     />
-                    <small>{d.description}</small>
                   </label>
-                ))}
+                </div>
+              </FormFieldset>
+            );
+          }}
+        />
+        {manual.length > 0 && (
+          <>
+            {submission.gradingStatus === 'GRADED' && (
+              <FormFieldset disabled={busy}>
                 <label>
-                  Feedback for response {i + 1}
-                  <TextAreaField
-                    aria-label={`Feedback for response ${i + 1}`}
-                    value={data.answers.find((a) => a.questionId === q.id)?.feedback ?? ''}
-                    onChange={(e) => edit(q.id, (old) => ({ ...old, feedback: e.target.value }))}
+                  Reason for adjusting the grade
+                  <InputField
+                    value={data.reason}
+                    onChange={(e) =>
+                      setData((old) => ({ ...old, reason: e.target.value, retry: null }))
+                    }
                   />
                 </label>
-              </div>
-            ))}
-            {submission.gradingStatus === 'GRADED' && (
-              <label>
-                Reason for adjusting the grade
-                <InputField
-                  value={data.reason}
-                  onChange={(e) =>
-                    setData((old) => ({ ...old, reason: e.target.value, retry: null }))
-                  }
-                />
-              </label>
+              </FormFieldset>
             )}
-          </FormFieldset>
-          <div className="inline-actions">
-            <p role="status">
-              {gradingFingerprint(data.answers) === saved
-                ? 'Grading draft saved.'
-                : 'Grading draft has unsaved changes.'}
-            </p>
-            <Button disabled={busy}>Save grading draft</Button>
-            <Button type="button" disabled={busy} onClick={() => void publish()}>
-              Publish final grade
-            </Button>
-          </div>
-        </form>
-      )}
+            <div className="inline-actions">
+              <p role="status">
+                {gradingFingerprint(data.answers) === saved
+                  ? 'Grading draft saved.'
+                  : 'Grading draft has unsaved changes.'}
+              </p>
+              <Button disabled={busy}>Save grading draft</Button>
+              <Button type="button" disabled={busy} onClick={() => void publish()}>
+                Publish final grade
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
       {error && (
         <p className="error" role="alert">
           {error}

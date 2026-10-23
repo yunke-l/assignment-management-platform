@@ -61,7 +61,6 @@ export function ClassManager({
     <>
       <section className="page-heading compact-heading">
         <div>
-          <span className="eyebrow">LEARN TOGETHER</span>
           <h1>Your classes</h1>
           <p className="muted">
             {teacher
@@ -152,7 +151,7 @@ export function ClassManager({
             ) : (
               <div className="empty class-empty">
                 <Owl className="detail-owl" />
-                <h2>A place to learn together.</h2>
+                <h2>Select a class</h2>
                 <p>Choose a class to invite students and review its members.</p>
               </div>
             )}

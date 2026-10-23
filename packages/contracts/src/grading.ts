@@ -37,7 +37,8 @@ export function validateAnswers(
     errors.push({
       path: 'answers',
       code: 'INVALID_ANSWER',
-      message: 'Submit every answerable question exactly once, without container answers.',
+      message:
+        'Answer every question once. For a question group, answer each question beneath the shared materials.',
     });
   for (const q of leaves) {
     const a = answers.find((answer) => answer.questionId === q.id);
@@ -125,11 +126,7 @@ export function validateAnswers(
             q.config.items.map((item) => item.id),
           )
         )
-          add(
-            q,
-            'payload.orderedItemIds',
-            'Confirm a complete sequence containing each item exactly once.',
-          );
+          add(q, 'payload.orderedItemIds', 'Arrange every item exactly once in the sequence.');
         break;
       case 'RESPONSE':
         if (a.type === q.type) {

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, type ReactNode } f
 import {
   questionV2Schema,
   validateQuestions,
+  validationMessage,
   type QuestionV2,
   type ValidationProblem,
 } from '@amp/contracts';
@@ -20,7 +21,7 @@ export function currentQuestionProblems(
         questionId: typeof issue.path[0] === 'number' ? questions[issue.path[0]]?.id : undefined,
         path: issue.path.slice(1).join('.') || 'questions',
         code: 'INVALID_QUESTION',
-        message: issue.message,
+        message: validationMessage(issue),
       }));
   return uniqueProblems([...shapeProblems, ...validateQuestions(questions, publish)]);
 }

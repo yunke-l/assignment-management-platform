@@ -5,6 +5,7 @@ export { uuidSchema, limitedText } from './primitives.js';
 export * from './questions.js';
 export * from './assets.js';
 export * from './grading.js';
+export * from './validation-messages.js';
 
 // PostgreSQL accepts uppercase UUIDs and returns their lowercase canonical form.
 
@@ -107,7 +108,13 @@ export const updateAssignmentSchema = createAssignmentSchema.extend({
   version: z.number().int().min(1),
 });
 export type UpdateAssignment = z.infer<typeof updateAssignmentSchema>;
-export const inviteTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+export const inviteTokenSchema = z
+  .string()
+  .trim()
+  .regex(
+    /^[A-Za-z0-9_-]{43}$/,
+    'Invitation code must contain 43 letters, numbers, hyphens (-), or underscores (_). Paste the full code from your teacher or administrator.',
+  );
 export const registerSchema = z
   .object({
     email: loginSchema.shape.email,

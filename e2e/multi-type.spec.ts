@@ -26,7 +26,8 @@ async function checkResponsiveLayout(page: Page, project: string, stage: string,
         await expect
           .poll(() =>
             focus
-              .getByRole('button', { name: 'Confirm this order', exact: true })
+              .getByRole('button', { name: /^Move .+ (up|down)$/ })
+              .first()
               .evaluate((button) => button.getBoundingClientRect().height),
           )
           .toBeGreaterThanOrEqual(44);
@@ -52,11 +53,12 @@ function tasks(): QuestionV2[] {
   single.prompt = text('Choose the nocturnal animal.');
   single.config.options = [choice('Owl'), choice('Robin')];
   single.answerKey.correctOptionId = single.config.options[0]!.id;
+  single.explanation = 'PRIVATE EXPLANATION: Owls are nocturnal.';
   const fill = leaf('FILL_BLANK', 1);
   if (fill.type !== 'FILL_BLANK') throw new Error('Unexpected type');
   const gap = randomUUID();
   fill.config.blanks = [{ id: gap, points: 1, caseSensitive: false }];
-  fill.answerKey.answers = [{ blankId: gap, values: ['night'] }];
+  fill.answerKey.answers = [{ blankId: gap, values: ['night', 'nighttime'] }];
   fill.prompt = [
     {
       id: randomUUID(),
@@ -146,6 +148,24 @@ const row = (page: Page, title: string) =>
   page.getByRole('button').filter({ has: page.getByRole('heading', { name: title, exact: true }) });
 const q = (page: Page, number: string) =>
   page.getByRole('region', { name: `Question ${number}`, exact: true });
+async function checkTeacherAnswers(page: Page) {
+  await expect(page.getByText('Teacher answer configuration', { exact: true })).toHaveCount(0);
+  await expect(q(page, '1.1').getByRole('radio', { name: 'Owl', exact: true })).toBeChecked();
+  await expect(q(page, '1.1')).toContainText('PRIVATE EXPLANATION: Owls are nocturnal.');
+  await expect(q(page, '1.2').getByRole('note')).toContainText('night / nighttime');
+  await expect(q(page, '1.3').getByRole('note')).toContainText('sings');
+  await expect(q(page, '1.3').getByText('Answer key', { exact: true })).toBeVisible();
+  await expect(q(page, '1.4').locator('.answer-card').first()).toContainText('bird');
+  await expect(q(page, '1.4').locator('.answer-card').first()).toContainText('Nouns');
+  await expect(q(page, '1.5').locator('.answer-card').first()).toContainText('owl');
+  await expect(q(page, '1.5').locator('.answer-card').first()).toContainText('night');
+  await expect(q(page, '1.6').getByRole('listitem')).toHaveText(['Birds', 'can', 'fly.']);
+  await expect(
+    q(page, '1.6').getByRole('button', { name: 'Confirm this order', exact: true }),
+  ).toHaveCount(0);
+  await expect(q(page, '1.7')).toContainText('PRIVATE EXAMPLE: A robin sings.');
+  await expect(q(page, '1.7').getByRole('textbox', { name: 'Your response' })).toHaveCount(0);
+}
 const png = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
   'base64',
@@ -253,7 +273,18 @@ test('all question types, reading materials, real uploads, draft recovery and pu
     }),
   ).toBeChecked();
   await checkResponsiveLayout(page, info.project.name, 'mixed-editor', robinOption);
+  await page.getByRole('button', { name: 'Teacher preview', exact: true }).click();
+  await checkTeacherAnswers(page);
+  await checkResponsiveLayout(page, info.project.name, 'teacher-preview', q(page, '1.5'));
+  await page.getByRole('button', { name: 'Close preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Student preview', exact: true }).click();
+  await expect(
+    page.locator('.assignment-preview').getByText(/PRIVATE EXAMPLE|PRIVATE EXPLANATION/),
+  ).toHaveCount(0);
+  await expect(page.locator('.assignment-preview .answer-key-label')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Close preview', exact: true }).click();
   await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await checkTeacherAnswers(page);
   await page.getByRole('button', { name: 'Publish to class →', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm publish', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Student progress', exact: true })).toBeVisible();
@@ -269,8 +300,13 @@ test('all question types, reading materials, real uploads, draft recovery and pu
     await student.getByLabel('Search title').fill(title);
     await student.getByRole('button', { name: 'Search', exact: true }).click();
     await row(student, title).click();
+    await expect(student.locator('.answer-progress')).toContainText(
+      '1/7 answerable questions complete',
+    );
     await expect(
-      student.getByText(/PRIVATE EXAMPLE|PRIVATE TRANSCRIPT|teacher-key-must-stay-private/),
+      student.getByText(
+        /PRIVATE EXAMPLE|PRIVATE EXPLANATION|PRIVATE TRANSCRIPT|teacher-key-must-stay-private/,
+      ),
     ).toHaveCount(0);
     await q(student, '1.1')
       .getByRole('button', { name: 'Enlarge A small sample picture', exact: true })
@@ -315,6 +351,27 @@ test('all question types, reading materials, real uploads, draft recovery and pu
     await selectChoice(q(student, '1.3').getByLabel('Question 1.3 blank 1', { exact: true }), {
       label: 'sings',
     });
+    const matching = q(student, '1.5');
+    const leftCards = matching.locator('.matching-columns > div').nth(0).locator('.answer-card');
+    const rightCards = matching.locator('.matching-columns > div').nth(1).locator('.answer-card');
+    const background = (card: Locator) =>
+      card.evaluate((el) => getComputedStyle(el).backgroundColor);
+    async function checkActivePair() {
+      expect(await background(leftCards.first())).not.toBe(await background(leftCards.last()));
+      await expect(
+        matching.getByRole('button', { name: 'Select owl', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'true');
+    }
+    async function checkFirstPair() {
+      const paired = await background(leftCards.first());
+      const unpaired = await background(leftCards.last());
+      expect(paired).not.toBe(unpaired);
+      expect(await background(rightCards.first())).toBe(paired);
+      expect(await background(rightCards.last())).toBe(unpaired);
+      await expect(
+        matching.getByRole('button', { name: 'Select owl', exact: true }),
+      ).toHaveAttribute('aria-pressed', 'false');
+    }
     if (info.project.name === 'desktop') {
       await student.bringToFront();
       const bird = q(student, '1.4').getByLabel('Category for bird', { exact: true });
@@ -323,15 +380,17 @@ test('all question types, reading materials, real uploads, draft recovery and pu
       await expect(q(student, '1.4').getByLabel('Category for fly', { exact: true })).toBeFocused();
       await selectChoiceWithKeyboard(
         q(student, '1.4').getByLabel('Category for fly', { exact: true }),
-        'Verbs',
+        'Nouns',
       );
       await student.keyboard.press('Tab');
       await q(student, '1.5').getByRole('button', { name: 'Select owl', exact: true }).focus();
       await student.keyboard.press('Space');
+      await checkActivePair();
       await q(student, '1.5')
         .getByRole('button', { name: 'Connect to night', exact: true })
         .focus();
       await student.keyboard.press('Space');
+      await checkFirstPair();
       await selectChoiceWithKeyboard(
         q(student, '1.5').getByLabel('Connect robin to', { exact: true }),
         'morning',
@@ -342,16 +401,22 @@ test('all question types, reading materials, real uploads, draft recovery and pu
         label: 'Nouns',
       });
       await selectChoice(q(student, '1.4').getByLabel('Category for fly', { exact: true }), {
-        label: 'Verbs',
+        label: 'Nouns',
       });
       await q(student, '1.5').getByRole('button', { name: 'Select owl', exact: true }).click();
+      await checkActivePair();
       await q(student, '1.5')
         .getByRole('button', { name: 'Connect to night', exact: true })
         .click();
+      await checkFirstPair();
       await selectChoice(q(student, '1.5').getByLabel('Connect robin to', { exact: true }), {
         label: 'morning',
       });
     }
+    await selectChoice(matching.getByLabel('Connect owl to', { exact: true }), { value: '' });
+    expect(await background(leftCards.first())).not.toBe(await background(leftCards.last()));
+    expect(await background(rightCards.first())).toBe(await background(leftCards.first()));
+    await selectChoice(matching.getByLabel('Connect owl to', { exact: true }), { label: 'night' });
     const cards = q(student, '1.6').locator('.ordering-list li');
     for (const [label, position] of [
       ['Birds', '0'],
@@ -367,23 +432,21 @@ test('all question types, reading materials, real uploads, draft recovery and pu
         }
       } else await selectChoice(card.getByLabel('Position', { exact: true }), { value: position! });
     }
-    const confirmOrder = q(student, '1.6').getByRole('button', {
-      name: 'Confirm this order',
-      exact: true,
-    });
+    await expect(
+      q(student, '1.6').getByRole('button', { name: 'Confirm this order', exact: true }),
+    ).toHaveCount(0);
+    await expect(student.locator('.answer-progress')).toContainText(
+      '6/7 answerable questions complete',
+    );
     if (info.project.name === 'desktop') {
-      await confirmOrder.focus();
-      await student.keyboard.press('Space');
       await q(student, '1.6').getByRole('button', { name: 'Move Birds down', exact: true }).focus();
       await student.keyboard.press('Space');
-      await expect(q(student, '1.6').getByRole('status')).toHaveText(
-        'Confirm your order before submitting.',
+      await expect(student.locator('.answer-progress')).toContainText(
+        '6/7 answerable questions complete',
       );
       await q(student, '1.6').getByRole('button', { name: 'Move Birds up', exact: true }).focus();
       await student.keyboard.press('Space');
-      await confirmOrder.focus();
-      await student.keyboard.press('Space');
-    } else await confirmOrder.click();
+    }
     const writing = q(student, '1.7');
     await writing
       .getByLabel('Your response', { exact: true })
@@ -400,6 +463,13 @@ test('all question types, reading materials, real uploads, draft recovery and pu
       .setInputFiles({ name: 'reading.wav', mimeType: 'audio/wav', buffer: wav() });
     await expect(writing.locator('audio')).toHaveCount(1, { timeout: 30000 });
     await student.reload();
+    await expect(q(student, '1.6').locator('.ordering-list li > .content-view')).toHaveText([
+      'Birds',
+      'can',
+      'fly.',
+    ]);
+    expect(await background(leftCards.first())).toBe(await background(rightCards.first()));
+    expect(await background(leftCards.first())).not.toBe('rgba(0, 0, 0, 0)');
     await expect(q(student, '1.2').getByLabel('Question 1.2 blank 1', { exact: true })).toHaveValue(
       ' NIGHT ',
     );
@@ -418,16 +488,91 @@ test('all question types, reading materials, real uploads, draft recovery and pu
     await expect(
       student.getByText('Submitted · Pending teacher review', { exact: true }),
     ).toBeVisible();
+    await expect(
+      student.getByText('Automatically graded: 7 / 8 points. Final grade pending.', {
+        exact: true,
+      }),
+    ).toBeVisible();
     await expect(student.getByText('My bird drawing', { exact: true })).toBeVisible();
     await page.reload();
     await page.getByRole('button', { name: '↑ Back to assignments', exact: true }).click();
     await page.getByLabel('Search title').fill(title);
     await page.getByRole('button', { name: 'Search', exact: true }).click();
     await row(page, title).click();
+    await expect(page.getByRole('cell').filter({ hasText: 'Pending review' })).toContainText(
+      'Automatically graded: 7 / 8 points',
+    );
+    const analysis = page.locator('.question-analysis');
+    await analysis.locator('summary').click();
+    const groupingAnalysis = analysis.getByRole('article', {
+      name: 'Analysis for question 1.4',
+      exact: true,
+    });
+    const responseAnalysis = analysis.getByRole('article', {
+      name: 'Analysis for question 1.7',
+      exact: true,
+    });
+    await expect(groupingAnalysis.locator('.analysis-overview')).toContainText('1.0 / 2 pts');
+    await expect(groupingAnalysis.locator('.analysis-unit-label')).toHaveText([
+      'bird100.0%',
+      'fly0.0%',
+    ]);
+    await expect(responseAnalysis).toContainText('1 awaiting review');
+    await expect(responseAnalysis.locator('.analysis-overview')).toContainText('— / 2 pts');
+    await analysis.locator('summary').click();
     await page.getByRole('button', { name: 'Review Sam Chen', exact: true }).click();
+    const review = page.locator('.grading-review');
+    await expect(
+      review.getByText('Automatically graded: 7 / 8 points', { exact: true }),
+    ).toBeVisible();
+    await expect(review.getByLabel('Automatic score for question 1.4', { exact: true })).toHaveText(
+      'Automatically graded · 1 / 2 points',
+    );
+    await expect(review.locator('.question-score')).toHaveCount(6);
+    await expect(review.getByLabel('Question 1.2 blank 1', { exact: true })).toHaveValue(' NIGHT ');
+    await expect(review.getByLabel('Category for fly', { exact: true })).toHaveValue('Nouns');
+    await expect(review.getByLabel('Your response', { exact: true })).toHaveValue(
+      'A robin sings in the morning.',
+    );
+    const directory = page.getByRole('navigation', { name: 'Question directory', exact: true });
+    const responseLink = () => directory.getByRole('link').last();
+    await expect(directory.getByRole('link')).toHaveCount(7);
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · Not graded');
+    await expect(responseLink()).toHaveAttribute('data-grading-status', 'pending');
+    await directory.getByRole('link', { name: 'Question 1.4 · 1 / 2 points', exact: true }).click();
+    await expect(
+      review.getByRole('region', { name: 'Question 1.4', exact: true }),
+    ).toBeInViewport();
+    expect(
+      await page.evaluate(() =>
+        Boolean(document.querySelector(location.hash)?.closest('.grading-review')),
+      ),
+    ).toBe(true);
+    const closeReview = review.getByRole('button', { name: 'Close review', exact: true });
+    const reloadGrading = review.getByRole('button', { name: 'Reload saved grading', exact: true });
+    await closeReview.scrollIntoViewIfNeeded();
+    const closeBounds = (await closeReview.boundingBox())!;
+    const reloadBounds = (await reloadGrading.boundingBox())!;
+    const buttonGap =
+      Math.abs(closeBounds.y - reloadBounds.y) < 1
+        ? reloadBounds.x - closeBounds.x - closeBounds.width
+        : reloadBounds.y - closeBounds.y - closeBounds.height;
+    expect(buttonGap).toBeGreaterThanOrEqual(10);
     await expect(page.getByRole('link', { name: 'Download original' })).toHaveCount(2);
+    await responseLink().click();
+    const responseQuestion = review.getByRole('region', { name: 'Question 1.7', exact: true });
+    await expect(responseQuestion).toBeInViewport();
+    await expect(responseQuestion.getByLabel('Meaning', { exact: true })).toBeVisible();
+    await page.getByLabel('Meaning', { exact: true }).fill('0');
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · Not graded');
+    await page.getByLabel('Pronunciation', { exact: true }).fill('0');
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · 0 / 2 points · Draft');
+    await expect(responseLink()).toHaveAttribute('data-grading-status', 'draft');
+    await page.getByLabel('Pronunciation', { exact: true }).fill('');
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · Not graded');
     await page.getByLabel('Meaning', { exact: true }).fill('1');
     await page.getByLabel('Pronunciation', { exact: true }).fill('1');
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · 2 / 2 points · Draft');
     await page
       .getByLabel('Feedback for response 1', { exact: true })
       .fill('Clear meaning and pronunciation.');
@@ -441,6 +586,7 @@ test('all question types, reading materials, real uploads, draft recovery and pu
     await page.locator('.work-recovery > summary').click();
     await page.getByRole('button', { name: `Resume Grading ${title}`, exact: true }).click();
     await expect(page.getByLabel('Meaning', { exact: true })).toHaveValue('1');
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · 2 / 2 points · Draft');
     await expect(page.getByLabel('Feedback for response 1', { exact: true })).toHaveValue(
       'Clear meaning and pronunciation.',
     );
@@ -462,9 +608,27 @@ test('all question types, reading materials, real uploads, draft recovery and pu
       .getByRole('dialog')
       .getByRole('button', { name: 'Publish final grade', exact: true })
       .click();
-    await expect(page.getByRole('cell', { name: '10 / 10', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: '9 / 10', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Review Sam Chen', exact: true }).click();
+    await expect(responseLink()).toHaveAccessibleName('Question 1.7 · 2 / 2 points');
+    await expect(responseLink()).toHaveAttribute('data-grading-status', 'graded');
+    await page.getByRole('button', { name: 'Close review', exact: true }).click();
+    await expect(directory.getByRole('link')).toHaveText([
+      '1.1',
+      '1.2',
+      '1.3',
+      '1.4',
+      '1.5',
+      '1.6',
+      '1.7',
+    ]);
+    await expect(directory.locator('[data-grading-status]')).toHaveCount(0);
+    await analysis.locator('summary').click();
+    await expect(responseAnalysis).toContainText('Grading complete');
+    await expect(responseAnalysis.locator('.analysis-overview')).toContainText('2.0 / 2 pts');
+    await checkResponsiveLayout(page, info.project.name, 'question-analysis', groupingAnalysis);
     await student.reload();
-    await expect(student.getByText('Submitted · 10 / 10 points', { exact: true })).toBeVisible();
+    await expect(student.getByText('Submitted · 9 / 10 points', { exact: true })).toBeVisible();
     await expect(
       student.getByText('Teacher feedback: Clear meaning and pronunciation.', { exact: true }),
     ).toBeVisible();

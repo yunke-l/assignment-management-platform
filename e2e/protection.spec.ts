@@ -120,7 +120,7 @@ test('new work survives navigation and reload; cancellation, undo and sign-out p
   await page.getByLabel('Title', { exact: true }).fill('Explicitly discarded at sign out');
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await page.getByRole('button', { name: 'Clear and sign out', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   expect(
     await page.evaluate(() =>
       Object.keys(sessionStorage).filter((key) => key.startsWith('classwork:work:')),
@@ -227,7 +227,7 @@ test('student answers and retry identity survive navigation, reload and session 
   await expect(page.getByLabel('Filter by status')).toBeVisible();
   await page.context().clearCookies();
   await selectChoice(page.getByLabel('Filter by status'), 'PUBLISHED');
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await login(page, 'other.student@example.test');
   await expect(page.getByRole('button', { name: `Resume ${title}`, exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
@@ -267,7 +267,7 @@ test('sensitive fields warn before loss; invitation codes remain in memory and h
   await page.getByRole('button', { name: 'Generate invitation', exact: true }).click();
   await page.getByRole('button', { name: 'Keep current code', exact: true }).click();
   await expect(page.getByLabel('New invitation code', { exact: true })).toHaveValue(code);
-  await nav(page, 'Account').click();
+  await page.getByRole('button', { name: 'Change password for Alex Morgan', exact: true }).click();
   await page.getByLabel('Current password').fill('test-only-unsaved-value');
   await nav(page, 'Assignments').click();
   await page.getByRole('button', { name: 'Keep working', exact: true }).click();
@@ -278,14 +278,14 @@ test('sensitive fields warn before loss; invitation codes remain in memory and h
   expect(await page.evaluate(() => JSON.stringify(sessionStorage))).not.toContain(code);
   await nav(page, 'Assignments').click();
   await page.getByRole('button', { name: 'Leave page', exact: true }).click();
-  await nav(page, 'Account').click();
+  await page.getByRole('button', { name: 'Change password for Alex Morgan', exact: true }).click();
   await expect(page.getByLabel('Current password')).toHaveValue('');
   await nav(page, 'Assignments').click();
   await expect(page.getByLabel('Filter by status')).toBeVisible();
   await expect(page.getByText('Loading assignments…', { exact: true })).toHaveCount(0);
   await context.clearCookies();
   await selectChoice(page.getByLabel('Filter by status'), 'PUBLISHED');
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   expect(
     await page.evaluate(() => {
       const event = new Event('beforeunload', { cancelable: true });

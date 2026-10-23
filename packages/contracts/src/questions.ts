@@ -385,7 +385,12 @@ export function validateQuestions(questions: QuestionV2[], publish = true): Vali
   ) => errors.push({ questionId: question?.id, path, code, message });
   const ids = new Set<string>();
   const identify = (question: QuestionV2, id: string, path: string) => {
-    if (ids.has(id)) add(question, path, 'Identifiers must be unique throughout the assignment.');
+    if (ids.has(id))
+      add(
+        question,
+        path,
+        'This question or item is duplicated. Use Copy in the editor to create a separate copy.',
+      );
     ids.add(id);
   };
   const roots = questions.filter((q) => q.parentId === null);
@@ -406,7 +411,11 @@ export function validateQuestions(questions: QuestionV2[], publish = true): Vali
   ) => {
     if (contentCharacterCount(content) > max) add(q, path, `Use at most ${max} text characters.`);
     if (!blanksAllowed && contentBlankIds(content).length)
-      add(q, path, 'Blank tokens are only allowed in a fill or cloze question prompt.');
+      add(
+        q,
+        path,
+        'Answer blanks can only be inserted into fill-in-the-blank or cloze question text.',
+      );
     const media = contentAssets(content);
     if (
       media.filter((m) => m.type === 'image').length > 10 ||
@@ -440,24 +449,33 @@ export function validateQuestions(questions: QuestionV2[], publish = true): Vali
   };
   const coverage = (q: QuestionV2, actual: string[], expected: string[], path: string) => {
     if (new Set(actual).size !== actual.length || actual.some((id) => !expected.includes(id)))
-      add(q, path, 'Answer keys must reference each existing item at most once.');
+      add(q, path, 'Set one correct answer per item, using the options shown.');
     else if (publish && !sameIdSet(actual, expected))
       add(q, path, 'Set a correct answer for every item.');
   };
   const sumPoints = (q: QuestionV2, values: number[]) => {
     if (publish && values.reduce((a, b) => a + b, 0) !== q.points)
-      add(q, 'points', 'Unit points must sum to the question points.');
+      add(q, 'points', 'The item scores must add up to this question’s total points.');
   };
   for (const q of questions) {
     identify(q, q.id, 'id');
     const position = `${q.parentId ?? 'root'}:${q.position}`;
-    if (positions.has(position)) add(q, 'position', 'Sibling positions must be unique.');
+    if (positions.has(position))
+      add(
+        q,
+        'position',
+        'Two questions share the same place in the list. Move one of them and save again.',
+      );
     positions.add(position);
     if (
       q.parentId !== null &&
       !questions.some((parent) => parent.id === q.parentId && parent.type === 'COMPOSITE')
     )
-      add(q, 'parentId', 'A child must belong to a container in this assignment.');
+      add(
+        q,
+        'parentId',
+        'Place this question in an existing question group, or move it to the top level.',
+      );
     checkContent(
       q,
       q.prompt,

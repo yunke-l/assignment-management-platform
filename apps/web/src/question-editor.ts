@@ -190,3 +190,10 @@ export function questionNumbers(questions: (QuestionV2 | PublicQuestionV2)[]) {
     });
   return numbers;
 }
+
+export function questionsInDisplayOrder<T extends QuestionV2 | PublicQuestionV2>(questions: T[]) {
+  const order = new Map([...questionNumbers(questions).keys()].map((id, index) => [id, index]));
+  return [...questions].sort(
+    (a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity),
+  );
+}

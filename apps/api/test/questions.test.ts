@@ -222,7 +222,7 @@ test('matching supports distractors and many-to-one, but rejects target reuse in
   assert.deepEqual(validateQuestions([q]), []);
   assert.equal(gradeAnswers([q], [reuse]).score, 4);
 });
-test('ordering requires explicit confirmation and accepts only complete accepted sequences', () => {
+test('ordering retains the API compatibility flag and accepts only complete accepted sequences', () => {
   const items = ['I', 'like', 'reading', '.'].map(choice);
   const order = items.map((item) => item.id);
   const alternative = [order[0]!, order[2]!, order[1]!, order[3]!];

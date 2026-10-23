@@ -1,5 +1,48 @@
 import { test, expect } from '@playwright/test';
 
+test('registration explains malformed invitation codes before sending and allows correction', async ({
+  page,
+}) => {
+  const registrations: { invitation: string }[] = [];
+  const unavailable =
+    'Invitation is invalid, expired, revoked or fully used. Ask your teacher or administrator for a new code.';
+  await page.route('**/api/auth/register', async (route) => {
+    registrations.push(route.request().postDataJSON());
+    await route.fulfill({ status: 400, json: { message: unavailable } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Have an invitation? Create an account' }).click();
+  await page.getByLabel('Your name', { exact: true }).fill('New Student');
+  await page.getByLabel('Email', { exact: true }).fill('new-student@example.test');
+  const password = page.getByLabel('Password', { exact: true });
+  await password.fill('Registration123!');
+  const invitation = page.getByLabel('Invitation code', { exact: true });
+  for (const code of ['short-code', 'A'.repeat(42) + '!', 'A'.repeat(44)]) {
+    await invitation.fill(code);
+    await page.getByRole('button', { name: 'Create account', exact: true }).click();
+    await expect(invitation).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert')).toContainText('43 letters, numbers, hyphens');
+    await expect(page.getByRole('alert')).toContainText('teacher or administrator');
+    await expect(page.getByRole('alert')).not.toContainText('pattern');
+    expect(registrations).toHaveLength(0);
+  }
+  const code = 'Ab9_-'.repeat(8) + 'xyz';
+  await invitation.fill(`  ${code}  `);
+  await expect(invitation).not.toHaveAttribute('aria-invalid', 'true');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText(unavailable);
+  expect(registrations).toEqual([
+    {
+      invitation: code,
+      email: 'new-student@example.test',
+      name: 'New Student',
+      password: 'Registration123!',
+    },
+  ]);
+  await expect(password).toHaveValue('Registration123!');
+  await expect(invitation).toBeEnabled();
+});
+
 test('account setup confirmation traps and restores focus without losing input', async ({
   page,
 }) => {
@@ -27,7 +70,7 @@ test('account setup confirmation traps and restores focus without losing input',
   await page.mouse.click(2, 2);
   await expect(dialog).toBeVisible();
   await leave.click();
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByLabel('Password', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Have an invitation? Create an account' }).click();
   await expect(page.getByLabel('Your name', { exact: true })).toHaveValue('Pending student');

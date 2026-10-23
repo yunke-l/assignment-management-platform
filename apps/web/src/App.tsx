@@ -182,7 +182,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
         <Brand />
         <span className="eyebrow">WORKSPACE</span>
         <nav aria-label="Workspace navigation">
-          {(['assignments', 'classes', 'account'] as const).map((item) => (
+          {(['assignments', 'classes'] as const).map((item) => (
             <Button
               key={item}
               className={section === item ? 'nav-current' : 'nav-link'}
@@ -194,26 +194,39 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
               }}
             >
               <WorkspaceIcon name={item} />
-              {item === 'assignments' ? 'Assignments' : item === 'classes' ? 'Classes' : 'Account'}
+              {item === 'assignments' ? 'Assignments' : 'Classes'}
             </Button>
           ))}
         </nav>
-        <div className="sidebar-note">
-          <span className="sidebar-note-star" aria-hidden="true">
-            ✦
-          </span>
-          <b>A little wiser, every day.</b>
-          <p>
-            {teacher ? 'A clear next step for every learner.' : 'Small steps. Lasting progress.'}
-          </p>
-        </div>
-        <div className="profile">
+        <Button
+          type="button"
+          className="profile"
+          aria-label={`Change password for ${user.name}`}
+          aria-current={section === 'account' ? 'page' : undefined}
+          title="Change password"
+          disabled={work.busy}
+          onClick={() => {
+            if (section !== 'account') go('/account');
+          }}
+        >
           <span className="avatar">{user.name[0]}</span>
-          <div>
+          <span className="profile-details">
             <b>{user.name}</b>
             <small>{teacher ? 'Teacher' : 'Student'}</small>
-          </div>
-        </div>
+          </span>
+          <svg
+            className="profile-chevron"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            aria-hidden="true"
+          >
+            <path d="m9 5 7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </Button>
         <Button
           className="text-button signout"
           disabled={loggingOut || work.busy}
@@ -348,10 +361,7 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
           <>
             <section className="page-heading assignment-heading" hidden={!isList}>
               <div className="heading-copy">
-                <span className="eyebrow">
-                  {teacher ? 'A LITTLE STRUCTURE. ROOM TO GROW.' : 'STAY CURIOUS. KEEP GROWING.'}
-                </span>
-                <h1>{teacher ? 'Make learning happen.' : 'Your learning, in motion.'}</h1>
+                <h1>Assignments</h1>
                 <p className="muted">
                   {teacher
                     ? 'Create assignments and see how your class is doing.'
@@ -371,9 +381,6 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                 )}
               </div>
               <div className="heading-friend">
-                <span className="friend-note">
-                  {teacher ? 'Big ideas start here.' : 'One step at a time.'}
-                </span>
                 <Owl pose={teacher ? 'reading' : 'wave'} />
               </div>
             </section>
@@ -457,8 +464,8 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                         {search || classFilter || statusFilter
                           ? 'No matching assignments.'
                           : teacher
-                            ? 'Start with one good question.'
-                            : 'You’re all caught up.'}
+                            ? 'No assignments yet.'
+                            : 'No assignments available.'}
                       </h3>
                       <p>
                         {search || classFilter || statusFilter
@@ -593,7 +600,6 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
                   ) : (
                     <div className="empty detail-empty">
                       <Owl className="detail-owl" />
-                      <span className="eyebrow">ONE PLACE TO KEEP TRACK</span>
                       <h2>
                         {detail.loading ? 'Opening assignment…' : 'Unable to open assignment'}
                       </h2>
@@ -613,12 +619,6 @@ function Workspace({ session, onLogout }: { session: Session; onLogout: () => vo
             </div>
           </>
         )}
-        <footer className="page-footer">
-          <span className="footer-brand">
-            Classwork <span aria-hidden="true">✦</span>
-          </span>
-          <span>A little curiosity goes a long way.</span>
-        </footer>
       </main>
     </div>
   );

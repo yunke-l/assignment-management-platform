@@ -6,6 +6,27 @@ async function capture(page: Page, name: string) {
     await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
     `${name} should fit the viewport without horizontal scrolling`,
   ).toBe(true);
+  const smallText = await page.locator('body').evaluate((body) => {
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const found: string[] = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const element = node.parentElement;
+      if (
+        !node.textContent?.trim() ||
+        !element?.checkVisibility() ||
+        element.closest('svg, [aria-hidden="true"], .sr-only, [class*="VisuallyHidden"]')
+      )
+        continue;
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      const box = range.getBoundingClientRect();
+      if (box.width > 1 && box.height > 1 && parseFloat(getComputedStyle(element).fontSize) < 14)
+        found.push(node.textContent.trim());
+    }
+    return found.slice(0, 20);
+  });
+  expect(smallText, `${name} should use readable text sizes`).toEqual([]);
   await page.screenshot({
     path: `test-results/${name}.png`,
     fullPage: true,
@@ -22,13 +43,14 @@ test('owl design stays usable across sign-in, editing, class management and acco
   const prefix = `${info.project.name}-owl`;
   const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Welcome back.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
   await expect(page.getByRole('img', { name: 'Ollie the owl reading a book' })).toBeVisible();
   await capture(page, `${prefix}-login`);
   await page.getByLabel('Email', { exact: true }).fill('teacher@example.test');
   await page.getByLabel('Password', { exact: true }).fill('LocalStudy2026!');
   await page.getByRole('button', { name: 'Sign in →', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Make learning happen.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Assignments', level: 1 })).toBeVisible();
+  await expect(navigation.getByRole('button')).toHaveText(['Assignments', 'Classes']);
   await expect(page.getByText('Loading assignments…', { exact: true })).toHaveCount(0);
   await capture(page, `${prefix}-workspace`);
   await page.getByRole('button', { name: '+ New assignment', exact: true }).click();
@@ -64,7 +86,10 @@ test('owl design stays usable across sign-in, editing, class management and acco
   await page.getByRole('button', { name: 'English · Group A', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Invite students', exact: true })).toBeVisible();
   await capture(page, `${prefix}-classes`);
-  await navigation.getByRole('button', { name: 'Account', exact: true }).click();
+  await page.getByRole('button', { name: 'Change password for Alex Morgan', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Change password for Alex Morgan', exact: true }),
+  ).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('heading', { name: 'Your account', exact: true })).toBeVisible();
   await capture(page, `${prefix}-account`);
   await page.emulateMedia({ reducedMotion: 'reduce' });
