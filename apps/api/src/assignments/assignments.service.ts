@@ -196,21 +196,6 @@ export class AssignmentsService {
     });
     return this.detail(actor, id);
   }
-  async remove(actor: Actor, id: string) {
-    this.requireTeacher(actor);
-    await this.db.transaction(async (tx) => {
-      await this.visible(actor, id, tx);
-      const [locked] = await tx.query(
-        'SELECT status, version FROM assignments WHERE id=$1 FOR UPDATE',
-        [id],
-      );
-      if (!locked || locked.status !== 'DRAFT')
-        throw new ConflictException('Only drafts can be deleted.');
-      await tx.query('DELETE FROM questions WHERE assignment_id=$1', [id]);
-      await tx.query('DELETE FROM assignments WHERE id=$1', [id]);
-    });
-    return { ok: true };
-  }
   async publish(actor: Actor, id: string, body: unknown) {
     this.requireTeacher(actor);
     await this.db.transaction(async (tx) => {

@@ -8,6 +8,50 @@ Code hosting: [GitHub repository](https://github.com/yunke-l/assignment-manageme
 
 The interface features Ollie the owl, balancing a welcoming learning environment with teachers' daily productivity: [Design notes and previews](docs/DESIGN.md).
 
+## Screenshots
+
+Captured from the locally running application on 2026-10-23 using an isolated database and synthetic demo accounts. The mobile screenshot uses a Chromium phone viewport.
+
+**Teacher workspace** — search assignments, filter by class or status, and open drafts or published work.
+
+![Teacher workspace showing assignment filters, two drafts, and a published assignment](docs/evidence/readme-workspace.png)
+
+<details>
+<summary>Sign-in page</summary>
+
+The sign-in page pairs Ollie the owl with account access and invitation registration.
+
+![Classwork sign-in page with the owl illustration, email and password fields, and registration link](docs/evidence/readme-login.png)
+
+</details>
+
+<details>
+<summary>Assignment editor</summary>
+
+Create questions, mark correct answers, assign points, and check the draft before publication.
+
+![Assignment editor showing class and deadline fields, a single-choice question, scoring, and publication checks](docs/evidence/readme-editor.png)
+
+</details>
+
+<details>
+<summary>Teacher results and student progress</summary>
+
+After a student submits, the teacher can see submission counts, final averages, and individual results.
+
+![Teacher report showing one graded submission, a 100 percent final average, and the student progress table](docs/evidence/readme-teacher-results.png)
+
+</details>
+
+<details>
+<summary>Mobile student result</summary>
+
+Students can review their submitted answers and score in the mobile layout.
+
+<img src="docs/evidence/readme-student-mobile.png" alt="Mobile student result showing the submitted answer and a score of 10 out of 10" width="390" />
+
+</details>
+
 ## Implemented features
 
 - Teacher/student sign-in, invitation registration, persistent login after refresh, session revocation on logout, and revocation of all sessions after a password change.

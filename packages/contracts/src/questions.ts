@@ -255,7 +255,6 @@ export const questionV2Schema = z.discriminatedUnion('type', [
 ]);
 export type QuestionV2 = z.infer<typeof questionV2Schema>;
 export type LeafQuestion = Exclude<QuestionV2, { type: 'COMPOSITE' }>;
-export type ResponseQuestion = Extract<QuestionV2, { type: 'RESPONSE' }>;
 export type PublicQuestionV2 = QuestionV2 extends infer Q
   ? Q extends QuestionV2
     ? Omit<Q, 'answerKey' | 'explanation'>

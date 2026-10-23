@@ -153,10 +153,3 @@ export type Invitation = {
   uses: number;
   revokedAt: string | null;
 };
-export type SubmissionRow = {
-  studentId: string;
-  name: string;
-  email: string;
-  removed: boolean;
-  submission: Submission | null;
-};

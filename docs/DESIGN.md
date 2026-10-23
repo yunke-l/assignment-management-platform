@@ -5,11 +5,11 @@ Lightweight professional controls pair with small playful touches from Ollie the
 ## Pages and interactions
 
 - The sign-in page uses a reading owl, a short welcome message, and a separate sign-in card.
-- Assignment, class, and account pages share navigation, headings, forms, and status labels. The owl appears in the welcome area, empty states, and submission results.
+- Assignment, class, and account pages share navigation, headings, forms, and status labels. The owl appears in welcome areas and empty states.
 - The assignment list occupies the main content area. Opening an assignment navigates to a separate detail page so questions and progress do not compete with the list for width. Editing uses its own page and hides the welcome banner.
 - Buttons share consistent heights, corners, and action hierarchy, without heavy bottom shadows. Inputs use thin borders, soft green focus styles, and clear error states.
-- Options use compact rows, with a round control on the left to mark the correct answer and a remove icon on the right. Undo restores deleted text and the correct-answer marker.
-- Due date and time have separate inputs. Validation appears beside each field, and failed saves retain content. A persistent bottom save bar shows current status and primary actions.
+- Single-choice options use cards with their own correct-answer control. Other question types expose their answer keys beside the relevant items. Undo restores removals while preserving subsequent edits.
+- Due date and time have separate inputs. Validation appears beside each field, and failed saves retain content. Save actions appear at the end of the form; the review panel shows totals, publication checks, and links to fields needing attention.
 - Invitation codes provide a copy button and success/failure feedback; expiry settings offer shortcuts for common durations.
 - Phones and tablets use a single-column workspace. Creating or opening an assignment navigates to its page. Desktop and mobile both provide a back-to-list button and breadcrumbs. Narrow forms use one column.
 - The Classwork name, English interface, and existing authorization, grading, and membership rules are retained.
@@ -49,7 +49,7 @@ The owl is an original project SVG in `apps/web/src/Owl.tsx`, with reading, wavi
 
 ### Mantine component library
 
-The frontend uses `@mantine/core` and `@mantine/hooks` 9.7.3. The entry-point `MantineProvider` supplies the forest-green theme, system fonts, rounded corners, and light mode. Theme configuration is in `apps/web/src/theme.ts`; component styles are in `apps/web/src/theme.module.css`, accommodating the existing 14px root font size and 16px mobile inputs.
+The frontend uses `@mantine/core` and `@mantine/hooks` 9.7.3. The entry-point `MantineProvider` supplies the forest-green theme, system fonts, rounded corners, and light mode. Theme configuration is in `apps/web/src/theme.ts`; component styles are in `apps/web/src/theme.module.css`, with a 16px root font size and 16px inputs.
 
 The initial migration covers sign-in/invitation registration, the password-change form, and global confirmation dialogs. Forms use Mantine `TextInput`, `Button`, and `Alert`, retaining existing requests, native field validation, password cleanup, and content-protection logic. Confirmation dialogs use `Modal`, focus Cancel by default, trap Tab focus, support Escape cancellation, and restore focus on close. Clicking the overlay neither confirms nor discards content.
 
@@ -61,19 +61,15 @@ Native form labels, radio controls, and visible keyboard focus are retained. Dec
 
 ## Page previews and checks
 
-Updated 2026-10-07:
+Current application screenshots, captured 2026-10-23:
 
-- [Desktop editor](evidence/controls-desktop.png)
-- [Mobile interaction using Computer Use](evidence/controls-mobile.jpg)
-- [Discard-edit confirmation](evidence/controls-confirmation.jpg)
+- [Desktop sign-in](evidence/readme-login.png)
+- [Teacher workspace](evidence/readme-workspace.png)
+- [Assignment editor](evidence/readme-editor.png)
+- [Teacher results](evidence/readme-teacher-results.png)
+- [Mobile student result](evidence/readme-student-mobile.png)
 
-Historical screenshots of the previous owl design:
-
-- [Desktop sign-in](evidence/owl-login-desktop.png)
-- [Desktop workspace](evidence/owl-workspace-desktop.png)
-- [Mobile workspace](evidence/owl-workspace-mobile.png)
-- [Teacher results](evidence/desktop-teacher-results.png)
-- [Student submission result](evidence/desktop-student-result.png)
+The [README gallery](../README.md#screenshots) displays these screenshots. Browser tests generate fresh screenshots and workflow recordings in `test-results/`; CI retains them as artifacts.
 
 `e2e/appearance.spec.ts` checks sign-in, workspace, editor, classes, account, mobile detail positioning, and 320px/768px layouts. It checks horizontal overflow and unhandled JavaScript errors and generates screenshots. Existing teacher publication, student submission, grade retention, session, and question-editing workflows remain covered by `e2e/workflow.spec.ts`. `e2e/protection.spec.ts` covers content recovery, failed saves, version conflicts, account isolation, invitation-code copying, sensitive-field warnings, and unavailable storage.
 

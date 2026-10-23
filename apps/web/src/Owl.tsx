@@ -151,7 +151,7 @@ export function Brand() {
   );
 }
 
-export function WorkspaceIcon({ name }: { name: 'assignments' | 'classes' | 'account' }) {
+export function WorkspaceIcon({ name }: { name: 'assignments' | 'classes' }) {
   return (
     <svg
       className="workspace-icon"
@@ -169,15 +169,10 @@ export function WorkspaceIcon({ name }: { name: 'assignments' | 'classes' | 'acc
           <rect x="5" y="4" width="14" height="17" rx="3" />
           <path d="M9 3h6v4H9Zm0 9h6m-6 4h4" />
         </>
-      ) : name === 'classes' ? (
+      ) : (
         <>
           <circle cx="9" cy="8" r="3" />
           <path d="M3 20v-2a6 6 0 0 1 12 0v2m1-15a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2" />
-        </>
-      ) : (
-        <>
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 21v-2a8 8 0 0 1 16 0v2" />
         </>
       )}
     </svg>
