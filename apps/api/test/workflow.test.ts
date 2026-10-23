@@ -58,6 +58,9 @@ before(async () => {
   await migrate(db);
   await migrate(db);
   await seed(db);
+  // Start once before concurrent requests. Otherwise Supertest attaches one set
+  // of startup listeners per request while its temporary server is starting.
+  await app.listen(0, '127.0.0.1');
   http = supertest(app.getHttpServer());
   for (const role of ['teacher', 'other.teacher', 'student', 'other.student']) {
     const res = await http
@@ -207,6 +210,11 @@ test('grades on the server and makes exact retries idempotent', async () => {
     [digest(tokens.student!)],
   );
   assert.deepEqual(session, { active: true, valid: true });
+  const server = app.getHttpServer();
+  const listenerCounts = () =>
+    ['listening', 'error', 'close'].map((event) => server.listenerCount(event));
+  assert.equal(server.listening, true);
+  const beforeReplayListeners = listenerCounts();
   const afterDeadline = await Promise.all(
     Array.from({ length: 12 }, () =>
       http.post(path).set('Authorization', auth('student')).send(input),
@@ -217,6 +225,8 @@ test('grades on the server and makes exact retries idempotent', async () => {
     assert.equal(replay.body.id, first.body.id);
     assert.equal(replay.body.score, first.body.score);
   }
+  assert.equal(server.listening, true);
+  assert.deepEqual(listenerCounts(), beforeReplayListeners);
 });
 test('computes teacher-only aggregate results', async () => {
   const path = `/api/assignments/${assignment.id}/stats`;

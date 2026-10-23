@@ -19,11 +19,11 @@ Date: 2026-09-24. Scope covers the product and business rules described in [Arch
 | Local persistence and recovery              | Demo database backed up before upgrade; isolated synthetic PGlite database validated offline copy/restore, integrity comparisons for 10 tables, credential revocation, and historical results; [Recovery evidence](evidence/recovery.json)       |
 | Build and deployment preparation            | Type checks, production build, and compiled-entry smoke checks passed; Docker, Compose, Caddy, CI, migration, rollback, and recovery documentation supplied                                                                                      |
 
-See [Verification](VERIFICATION.md) for exact check counts and environments. Source, configuration, and synthetic demo evidence are stored in Git. A [Private GitHub repository](https://github.com/yunke-l/assignment-management-platform) was subsequently created at the user's request; dependencies, databases, environment variables, and runtime artifacts are excluded from version control. The application continues to run locally; hosted CI results are available in [Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml).
+See [Verification](VERIFICATION.md) for exact check counts and environments. Source, configuration, and synthetic demo evidence are stored in the [GitHub repository](https://github.com/yunke-l/assignment-management-platform); dependencies, databases, environment variables, and runtime artifacts are excluded from version control. The application continues to run locally; hosted CI results are available in [Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml).
 
 ## Outside this delivery scope
 
-- Domain, HTTPS, and public application deployment: pending platform selection. Private GitHub code hosting was added following a later request.
+- Domain, HTTPS, and public application deployment: pending platform selection. GitHub source hosting and CI do not deploy the application.
 - Docker builds/container execution: subsequent code review added the CI `container` check; use Actions results for the corresponding commit. Production PostgreSQL backup/restore still needs acceptance in the target environment.
 - Physical-device Safari, a full assistive-technology audit, sustained load, and production capacity: local Chromium or one synthetic test run cannot replace these.
 - Example performance target: the two local list-query P95 measurements varied considerably. Although the latest run was below 300 ms, this does not establish stable capacity; multiple runs in the target environment are required.

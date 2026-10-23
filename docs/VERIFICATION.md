@@ -1,6 +1,6 @@
 # Verification record
 
-Date: 2026-09-24. Delivery scope confirmed by the user: local application plus deployment preparation; no public application deployment in this task. The user subsequently requested private GitHub source hosting.
+Date: 2026-09-24. Historical delivery scope: local application plus deployment preparation; no public application deployment. GitHub source hosting was added subsequently.
 
 The September and October 7 records below are historical. The latest multi-type implementation evidence is in [Multi-type upgrade, 2026-10-08](#multi-type-upgrade-2026-10-08).
 
@@ -62,7 +62,7 @@ All evidence uses synthetic data. These are automated workflow recordings, not e
 ## Remaining external verification
 
 - Docker is not installed on this host. The current CI `container` job builds and smoke-tests the production image with PostgreSQL and validates Caddy configuration. Check the commit's hosted result before deployment; public TLS remains a target-environment check.
-- Source hosting is configured at [the private GitHub repository](https://github.com/yunke-l/assignment-management-platform). Hosted CI results and artifacts are available per commit in [GitHub Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml); local results above do not by themselves prove a hosted run succeeded.
+- Source hosting is configured at [the GitHub repository](https://github.com/yunke-l/assignment-management-platform). Hosted CI results and artifacts are available per commit in [GitHub Actions](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml); local results above do not by themselves prove a hosted run succeeded.
 - No public domain/HTTPS deployment, production backup restore, failover or long-running load test has been completed. See [deployment and recovery](DEPLOYMENT.md) for the commands and acceptance steps.
 - Mobile coverage uses Chromium viewport/touch emulation, not physical iOS/Safari hardware. This is not a comprehensive assistive-technology audit.
 - The September build's two third-party Zod PURE-comment warnings were corrected in the October code audit below.

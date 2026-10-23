@@ -2,9 +2,9 @@
 
 An assignment management platform for small teaching groups. Built with a React + TypeScript frontend, a NestJS API, and PostgreSQL, using an independent implementation and synthetic demo data.
 
-Delivery scope: **a complete local version and deployment preparation**. As requested, online deployment will follow once a hosting platform is provided. See [Acceptance](docs/ACCEPTANCE.md) for scope checks, [Verification](docs/VERIFICATION.md) for check results, and [Architecture](docs/ARCHITECTURE.md) for system design and business rules.
+Delivery scope: **a complete local version and deployment preparation**. A hosted application has not been provisioned. See [Acceptance](docs/ACCEPTANCE.md) for scope checks, [Verification](docs/VERIFICATION.md) for check results, and [Architecture](docs/ARCHITECTURE.md) for system design and business rules.
 
-Code hosting: [Private GitHub repository](https://github.com/yunke-l/assignment-management-platform) · [GitHub Actions check history](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml). Repository access requires an authorized GitHub account; the application still runs locally.
+Code hosting: [GitHub repository](https://github.com/yunke-l/assignment-management-platform) · [GitHub Actions check history](https://github.com/yunke-l/assignment-management-platform/actions/workflows/ci.yml). Source hosting and CI are separate from application deployment; the application runs locally.
 
 The interface features Ollie the owl, balancing a welcoming learning environment with teachers' daily productivity: [Design notes and previews](docs/DESIGN.md).
 
@@ -13,7 +13,10 @@ The interface features Ollie the owl, balancing a welcoming learning environment
 - Teacher/student sign-in, invitation registration, persistent login after refresh, session revocation on logout, and revocation of all sessions after a password change.
 - Teacher class creation, invitations with expiry and usage limits, invitation revocation, paginated member lists, and member removal.
 - Draft creation, preview, editing, deletion, and publication; version checks detect editing conflicts, and published questions are immutable.
-- 2–6 options per question, up to 20 questions, server-side validation and grading, and one final submission per student.
+- Seven scored question types: single choice, fill-in-the-blank, cloze choice, grouping, matching, ordering, and manually graded responses; reading/general groups contain answerable child questions.
+- Up to 20 top-level questions, 100 answerable questions, and 200 scoring units per assignment, with server-side validation and one final submission per student.
+- Image/audio teaching materials and student answer attachments, with bounded uploads, media processing, authenticated playback, and private original-file storage.
+- Objective grading plus manual rubric drafts, grade publication, and revision history; reports distinguish pending review, graded, and not submitted.
 - Idempotent submission requests, database deadline checks, transaction rollback, and database uniqueness constraints.
 - Filters by class, title, and status; paginated queries; teacher reports showing submitted/not-submitted students, scores, and averages.
 - Desktop/mobile layouts, keyboard operation, loading and error states, and retries after failures.
@@ -22,13 +25,13 @@ The interface features Ollie the owl, balancing a welcoming learning environment
 
 ## Membership and historical assignment rules
 
-Implemented as confirmed by the user: **freeze the recipient list at publication**. New members receive only assignments published after they join. Removing a student immediately revokes their access to view and submit existing assignments in that class; teachers retain historical grades. Rejoining does not restore access to old assignments, but the student can receive new ones.
+The recipient list is **frozen at publication**. New members receive only assignments published after they join. Removing a student immediately revokes their access to view and submit existing assignments in that class; teachers retain historical grades. Rejoining does not restore access to old assignments, but the student can receive new ones.
 
-The statistics denominator is the recipient list at publication, including students removed later. Averages include submitted scores only. Missing submissions display “Not submitted”; the average is `null` when no one has submitted, rather than zero. Draft preview statistics use the current class size.
+The statistics denominator is the recipient list at publication, including students removed later. Final averages include only released final grades and exclude submissions pending manual review. Missing submissions display “Not submitted”; the average is `null` when no final grades are available. Draft preview statistics use the current class size.
 
 ## Run locally (no Docker required)
 
-Requires Node.js 22.13+ (22.x) or 24+; validation used Node 24. Run from this directory:
+Requires Node.js 22.13+ (22.x) or 24+; validation used Node 24. Audio processing also requires executable `ffmpeg` and `ffprobe`, available on `PATH` or configured with `FFMPEG_PATH` and `FFPROBE_PATH`. Run from this directory:
 
 ```sh
 npm ci
@@ -140,8 +143,12 @@ After contract changes, run `npm run build -w @amp/contracts` and restart the AP
 
 ## Deployment and boundaries
 
-[Deployment, migration, rollback, and recovery instructions](docs/DEPLOYMENT.md) include Docker/Caddy/PostgreSQL commands. Local PGlite offline recovery has passed. The code is connected to a private GitHub repository; individual CI results are recorded in Actions. The CI `container` job builds the production image and runs PostgreSQL migrations, static-asset/API smoke checks, and Caddy configuration validation. There is currently no hosted application deployment; public HTTPS and production PostgreSQL backup/restore still require validation in the target environment.
+[Deployment, migration, rollback, and recovery instructions](docs/DEPLOYMENT.md) include Docker/Caddy/PostgreSQL commands. Local PGlite offline recovery has passed. Individual CI results are recorded in GitHub Actions. The CI `container` job builds the production image and runs PostgreSQL migrations, static-asset/API smoke checks, and Caddy configuration validation. There is currently no hosted application deployment; public HTTPS and production PostgreSQL backup/restore still require validation in the target environment.
 
-The current version excludes manual grading, attachments, multiple attempts, AI grading, automatic email, self-service forgotten-password recovery, and distributed rate limiting. Sessions expire after a fixed seven days. Filtering uses case-insensitive title substring matching. Each pagination request uses a consistent snapshot; refresh the list if data is added or removed while browsing across pages.
+The current version excludes multiple attempts, AI grading, automatic email, self-service forgotten-password recovery, and distributed rate limiting. Attachments are limited to the supported image/audio formats; arbitrary document uploads are not supported. Sessions expire after a fixed seven days. Filtering uses case-insensitive title substring matching. Each pagination request uses a consistent snapshot; refresh the list if data is added or removed while browsing across pages.
 
 Further design details: [Architecture](docs/ARCHITECTURE.md), [API](docs/API.md), and [Verification evidence](docs/VERIFICATION.md). Do not describe synthetic test results as real user scale or production performance.
+
+## License
+
+This project's original source and documentation are licensed under the [MIT License](LICENSE). Third-party dependencies retain their own licenses.
