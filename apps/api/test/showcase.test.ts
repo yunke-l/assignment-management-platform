@@ -12,7 +12,7 @@ import { showcaseAnswers, showcaseQuestions, paragraph } from '../src/database/s
 import { expandShowcaseComposites } from '../src/database/showcase-composites.js';
 import { AssignmentsService } from '../src/assignments/assignments.service.js';
 import { MultiTypeService } from '../src/assignments/multi-type.service.js';
-import { createAssignmentV2Schema, type Actor } from '@amp/contracts';
+import { createAssignmentV2Schema, questionV2Schema, type Actor } from '@amp/contracts';
 import { randomUUID } from 'node:crypto';
 
 process.env.NODE_ENV = 'test';
@@ -187,11 +187,12 @@ test('composite expansion adds relevant practice once and preserves historical a
     );
     await multi.publish(teacher, assignment.id, { schemaVersion: 2, version: assignment.version });
     const original = await multi.detail(teacher, assignment.id);
+    const originalQuestions = original.questions.map((q) => questionV2Schema.parse(q));
     await multi.submit(student, assignment.id, {
       schemaVersion: 2,
       publishedVersion: Number(original.publishedVersion),
       requestId: randomUUID(),
-      answers: showcaseAnswers(original.questions, 0),
+      answers: showcaseAnswers(originalQuestions, 0),
     });
     const history = async () => ({
       submissions: await db.query('SELECT * FROM submissions ORDER BY id'),
@@ -202,6 +203,7 @@ test('composite expansion adds relevant practice once and preserves historical a
       { assignmentId: assignment.id, added: 10 },
     ]);
     const expanded = await multi.detail(teacher, assignment.id);
+    const expandedQuestions = expanded.questions.map((q) => questionV2Schema.parse(q));
     for (const q of original.questions)
       assert.deepEqual(
         expanded.questions.find((item) => item.id === q.id),
@@ -228,7 +230,7 @@ test('composite expansion adds relevant practice once and preserves historical a
         schemaVersion: 2,
         publishedVersion: Number(original.publishedVersion),
         requestId: randomUUID(),
-        answers: showcaseAnswers(original.questions, 0),
+        answers: showcaseAnswers(originalQuestions, 0),
       }),
       /Reload/,
     );
@@ -236,7 +238,7 @@ test('composite expansion adds relevant practice once and preserves historical a
       schemaVersion: 2,
       publishedVersion: Number(expanded.publishedVersion),
       requestId: randomUUID(),
-      answers: showcaseAnswers(expanded.questions, 0),
+      answers: showcaseAnswers(expandedQuestions, 0),
     });
   } finally {
     await db.onModuleDestroy();

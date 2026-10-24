@@ -32,6 +32,7 @@
     "db:showcase": "npm run build -w @amp/contracts && npm run db:showcase -w @amp/api"
   },
   "overrides": {
+    "multer": "^2.5.0",
     "shell-quote": "^1.11.0"
   },
   "devDependencies": {
