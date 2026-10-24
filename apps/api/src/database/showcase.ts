@@ -11,6 +11,7 @@ import { AssetsService } from '../assets/assets.service.js';
 import { ClassesService } from '../classes/classes.js';
 import { digest } from '../auth/session.js';
 import { showcaseAnswers, showcaseQuestions } from './showcase-content.js';
+import { expandShowcaseComposites } from './showcase-composites.js';
 
 // Stable identifiers scope repeat runs to this synthetic dataset. Existing user work is preserved.
 const key = (value: string) => {
@@ -174,6 +175,7 @@ export async function seedShowcase(db: Database) {
       [q.id, '^【[^】]+】[[:space:]]*', '', JSON.stringify(definition)],
     );
   }
+  await expandShowcaseComposites(db);
   await mkdir(assets.directory, { recursive: true });
   const diagram = await sharp(
     Buffer.from(

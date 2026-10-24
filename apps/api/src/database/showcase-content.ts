@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { questionV2Schema, type QuestionV2, type Content, type AnswerV2 } from '@amp/contracts';
+import {
+  contentText,
+  questionV2Schema,
+  type QuestionV2,
+  type Content,
+  type AnswerV2,
+} from '@amp/contracts';
 
 export const paragraph = (text: string): Content => [
   { id: randomUUID(), type: 'paragraph', children: [{ type: 'text', text }] },
@@ -37,6 +43,95 @@ function single(prompt: string, labels: string[], correct: number, points = 5) {
   );
   q.explanation = `The correct answer is “${labels[correct]}”. Read the sentence and check its meaning.`;
   return q;
+}
+
+/** Extra objective practice keeps historical manual grading valid when upgrading demo data. */
+export function showcaseCompositeAdditions(parent: QuestionV2): QuestionV2[] {
+  if (parent.type !== 'COMPOSITE') return [];
+  const text = contentText(parent.prompt);
+  let additions: QuestionV2[] = [];
+  if (text.includes('On Friday, Class A cleaned the park.')) {
+    additions = [
+      single(
+        'What did Mia collect during the park clean-up?',
+        ['Plastic bottles', 'Old clothes', 'Glass jars'],
+        0,
+      ),
+      single(
+        'How often did the class decide to return to the park?',
+        ['Every week', 'Every month', 'Every year'],
+        1,
+      ),
+    ];
+  } else if (text.startsWith('Green School Challenge: plan a recycling station')) {
+    additions = [
+      single(
+        'Which item belongs in the paper recycling bin?',
+        ['A used tissue', 'A clean cardboard box', 'A plastic bottle'],
+        1,
+      ),
+      single(
+        'Which action would help classmates sort their waste correctly?',
+        [
+          'Mixing all waste in one bin',
+          'Removing the bin labels',
+          'Adding clear labels with example items',
+        ],
+        2,
+      ),
+    ];
+  } else if (
+    text.startsWith('A greener school') &&
+    text.includes('environmentally friendly way to travel')
+  ) {
+    additions = [
+      single(
+        'Which journey is most suitable for walking?',
+        ['A short trip on a safe route', 'A trip across the ocean', 'A journey on a motorway'],
+        0,
+      ),
+      single(
+        'How can classmates reduce the number of cars travelling to school?',
+        [
+          'Each student takes a separate taxi',
+          'They share a bus journey',
+          'They leave car engines running',
+        ],
+        1,
+      ),
+      single(
+        'What should you do before cycling to school?',
+        [
+          'Ride without checking the route',
+          'Ignore traffic signals',
+          'Check your brakes and choose a safe route',
+        ],
+        2,
+      ),
+    ];
+  } else if (
+    text.startsWith('The school garden') &&
+    text.includes('Mia made signs from old cardboard.')
+  ) {
+    additions = [
+      single(
+        'What did Mia and her classmates plant?',
+        ['Apples and pears', 'Tomatoes and carrots', 'Roses and tulips'],
+        1,
+      ),
+      single(
+        'What did each student bring to the garden?',
+        ['A reusable bottle of water', 'A disposable plastic bag', 'A new cardboard sign'],
+        0,
+      ),
+      single(
+        'When do the students plan to water the garden?',
+        ['Only on Saturdays', 'Every evening', 'Every morning'],
+        2,
+      ),
+    ];
+  }
+  return additions.map((q) => questionV2Schema.parse({ ...q, parentId: parent.id }));
 }
 function fill() {
   const blanks = [0, 1].map(() => ({ id: randomUUID(), points: 5, caseSensitive: false }));
@@ -264,6 +359,15 @@ export function showcaseQuestions(kind: string): QuestionV2[] {
           'Prepare a one-minute introduction about a book you recommend. Explain the main idea and why a classmate might enjoy reading it. You can attach audio.',
         ),
       ];
+  }
+  for (const parent of questions.filter((q) => q.type === 'COMPOSITE')) {
+    const children = questions.filter((q) => q.parentId === parent.id);
+    questions.push(
+      ...showcaseCompositeAdditions(parent).map((q, index) => ({
+        ...q,
+        position: children.length + index,
+      })),
+    );
   }
   let position = 0;
   return questions.map((q) => ({ ...q, position: q.parentId ? q.position : position++ }));

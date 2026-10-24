@@ -7,10 +7,13 @@ import { join } from 'node:path';
 import { Database } from '../src/database/database.js';
 import { migrate } from '../src/database/migrate.js';
 import { seedShowcase } from '../src/database/showcase.js';
-import { ids } from '../src/database/seed.js';
+import { ids, seed } from '../src/database/seed.js';
+import { showcaseAnswers, showcaseQuestions, paragraph } from '../src/database/showcase-content.js';
+import { expandShowcaseComposites } from '../src/database/showcase-composites.js';
 import { AssignmentsService } from '../src/assignments/assignments.service.js';
 import { MultiTypeService } from '../src/assignments/multi-type.service.js';
-import { type Actor } from '@amp/contracts';
+import { createAssignmentV2Schema, type Actor } from '@amp/contracts';
+import { randomUUID } from 'node:crypto';
 
 process.env.NODE_ENV = 'test';
 process.env.DATABASE_DRIVER = 'pglite';
@@ -73,6 +76,11 @@ test('showcase covers teaching, submission, media, grading and historical states
       "SELECT DISTINCT definition->'config'->>'kind' AS kind FROM questions WHERE question_type='COMPOSITE'",
     );
     assert.deepEqual(groups.map((g) => g.kind).sort(), ['GENERAL', 'READING']);
+    const children = await db.query(
+      `SELECT p.id,count(c.id)::int AS n FROM questions p
+       LEFT JOIN questions c ON c.parent_id=p.id WHERE p.question_type='COMPOSITE' GROUP BY p.id`,
+    );
+    assert.ok(children.every((parent) => parent.n === 4));
     const [invalidTime] =
       await db.query(`SELECT count(*)::int AS n FROM submissions s JOIN assignments a ON a.id=s.assignment_id
       WHERE s.submitted_at<a.published_at OR s.submitted_at>a.due_at OR s.graded_at<s.submitted_at`);
@@ -136,5 +144,101 @@ test('showcase covers teaching, submission, media, grading and historical states
   } finally {
     await db.onModuleDestroy();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('composite expansion adds relevant practice once and preserves historical answers and scores', async () => {
+  const db = new Database();
+  try {
+    await migrate(db);
+    await seed(db);
+    const multi = new MultiTypeService(db, new AssignmentsService(db));
+    const actors = await db.query<Actor & Record<string, unknown>>(
+      'SELECT id,email,name,role FROM users WHERE id=ANY($1::uuid[])',
+      [[ids.teacher, ids.student, ids.outsider]],
+    );
+    const teacher = actors.find((a) => a.id === ids.teacher)!;
+    const student = actors.find((a) => a.id === ids.student)!;
+    const reading = showcaseQuestions('reading').slice(0, 3);
+    const project = showcaseQuestions('project').slice(0, 3);
+    const travel = showcaseQuestions('reading')[0]!;
+    travel.prompt = paragraph(
+      'A greener school\nOur class wants to make the school greener. Answer the following task about choosing an environmentally friendly way to travel.',
+    );
+    const garden = showcaseQuestions('reading')[0]!;
+    garden.prompt = paragraph('The school garden\nMia made signs from old cardboard.');
+    const travelChild = showcaseQuestions('grammar')[0]!;
+    travelChild.parentId = travel.id;
+    const gardenChild = showcaseQuestions('grammar')[0]!;
+    gardenChild.parentId = garden.id;
+    const questions = [...reading, ...project, travel, travelChild, garden, gardenChild];
+    let position = 0;
+    for (const q of questions) if (!q.parentId) q.position = position++;
+    const assignment = await multi.create(
+      teacher,
+      createAssignmentV2Schema.parse({
+        schemaVersion: 2,
+        classId: ids.classroom,
+        title: 'Legacy composite practice',
+        description: 'Learning focus: reading.\nLegacy composite practice',
+        dueAt: new Date(Date.now() + 86_400_000).toISOString(),
+        questions,
+      }),
+    );
+    await multi.publish(teacher, assignment.id, { schemaVersion: 2, version: assignment.version });
+    const original = await multi.detail(teacher, assignment.id);
+    await multi.submit(student, assignment.id, {
+      schemaVersion: 2,
+      publishedVersion: Number(original.publishedVersion),
+      requestId: randomUUID(),
+      answers: showcaseAnswers(original.questions, 0),
+    });
+    const history = async () => ({
+      submissions: await db.query('SELECT * FROM submissions ORDER BY id'),
+      results: await db.query('SELECT * FROM answer_results ORDER BY submission_id,question_id'),
+    });
+    const before = await history();
+    assert.deepEqual(await expandShowcaseComposites(db), [
+      { assignmentId: assignment.id, added: 10 },
+    ]);
+    const expanded = await multi.detail(teacher, assignment.id);
+    for (const q of original.questions)
+      assert.deepEqual(
+        expanded.questions.find((item) => item.id === q.id),
+        q,
+      );
+    for (const parent of expanded.questions.filter((q) => q.type === 'COMPOSITE'))
+      assert.equal(expanded.questions.filter((q) => q.parentId === parent.id).length, 4);
+    assert.equal(expanded.publishedVersion, Number(original.publishedVersion) + 1);
+    assert.deepEqual(await history(), before);
+    assert.deepEqual(await expandShowcaseComposites(db), []);
+    assert.deepEqual(await multi.detail(teacher, assignment.id), expanded);
+    assert.deepEqual(await history(), before);
+    await db.query('INSERT INTO class_memberships(class_id,student_id) VALUES ($1,$2)', [
+      ids.classroom,
+      ids.outsider,
+    ]);
+    await db.query('INSERT INTO assignment_recipients(assignment_id,student_id) VALUES ($1,$2)', [
+      assignment.id,
+      ids.outsider,
+    ]);
+    const outsider = actors.find((a) => a.id === ids.outsider)!;
+    await assert.rejects(
+      multi.submit(outsider, assignment.id, {
+        schemaVersion: 2,
+        publishedVersion: Number(original.publishedVersion),
+        requestId: randomUUID(),
+        answers: showcaseAnswers(original.questions, 0),
+      }),
+      /Reload/,
+    );
+    await multi.submit(outsider, assignment.id, {
+      schemaVersion: 2,
+      publishedVersion: Number(expanded.publishedVersion),
+      requestId: randomUUID(),
+      answers: showcaseAnswers(expanded.questions, 0),
+    });
+  } finally {
+    await db.onModuleDestroy();
   }
 });
