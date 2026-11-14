@@ -161,7 +161,10 @@ The CLI uses the database specified by the root `.env`. Invitations are bound to
 npm run check
 npm run format:check
 npm run test:recovery
+npm audit --audit-level=low
 ```
+
+CI also audits development dependencies. ESLint 10.15+ uses patched minimatch; the scoped `@typescript-eslint/typescript-estree` override keeps the TypeScript parser on minimatch 11.0.8+ until its upstream dependency range includes the fix for [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
 
 `check` includes ESLint with zero warnings, type checks for applications/scripts/tests, development-process regression tests, frontend request-handling tests, HTTP integration tests, a production build, and smoke checks of the compiled entry point. `test:recovery` creates a synthetic PGlite data directory to validate offline backup, restoration, credential revocation, and historical grades without touching the local demo database. Integration tests use isolated in-memory PGlite by default; real PostgreSQL tests must target an empty, disposable, dedicated database:
 
