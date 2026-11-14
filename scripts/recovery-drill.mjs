@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
-import { cp, mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import supertest from 'supertest';
@@ -106,6 +106,7 @@ function recording() {
   return b;
 }
 let app;
+let passed = false;
 try {
   app = await open(source);
   let db = app.get(Database);
@@ -455,8 +456,15 @@ try {
     `${JSON.stringify(evidence, null, 2)}\n`,
   );
   console.log(
-    `Local recovery passed: ${tables.length} tables preserved; credentials revoked; teacher/student results verified. Synthetic fixture: ${evidence.fixtureDirectory}`,
+    `Local recovery passed: ${tables.length} tables preserved; credentials revoked; teacher/student results verified. Evidence: docs/evidence/recovery.json`,
   );
+  passed = true;
 } finally {
   await app?.close();
+  if (passed && process.env.KEEP_RECOVERY_FIXTURE !== '1') {
+    await rm(directory, { recursive: true, force: true });
+    console.log(`Synthetic recovery fixture removed: ${path.relative(root, directory)}`);
+  } else {
+    console.log(`Synthetic recovery fixture retained: ${path.relative(root, directory)}`);
+  }
 }

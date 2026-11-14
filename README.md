@@ -188,6 +188,14 @@ BENCH_DATABASE_URL=postgresql://amp:password@localhost:5432/classwork_bench npm 
 
 The script rejects databases that already contain a users table, generates isolated samples, and records HTTP latency and `EXPLAIN (ANALYZE, BUFFERS)`. See [Query measurements](docs/PERFORMANCE.md) for results and limitations.
 
+### Local disk usage
+
+Installed dependencies, npm downloads, test browsers and local databases can occupy several gigabytes even though they are ignored by Git. This project stores npm's cache in `.npm-cache/`; run `npm cache clean --force` to clear it. With tests stopped, `.local/playwright/`, `playwright-report/`, `test-results/` and `coverage/` can also be removed. Reinstall Chromium with the command above before the next browser test.
+
+Successful recovery drills remove their own synthetic databases and media after closing the application; the verification manifest stays in `docs/evidence/recovery.json`. Failed drills retain their fixture for diagnosis. Use `KEEP_RECOVERY_FIXTURE=1 npm run test:recovery` to retain a successful fixture too. Old `.local/recovery-drill-*` directories can be removed once their tests have stopped and diagnosis is complete.
+
+Keep `.local/database/`, `.local/assets/` and `.local/backups/`: they contain persistent demo data, uploaded media and recovery points. Preserve private documents and any custom data directories as well. Do not delete `.local/` wholesale. Keep `node_modules/` while developing; restoring it requires `npm ci`.
+
 ## Project structure
 
 ```text

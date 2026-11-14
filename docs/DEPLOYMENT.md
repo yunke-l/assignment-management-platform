@@ -54,6 +54,8 @@ Once schema-v2 assignments exist, the old single-choice UI/API cannot read them 
 
 Run `npm run test:recovery` for a self-contained drill with synthetic PGlite data. The script creates a new fixture under `.local/recovery-drill-*`, writes an assignment and submission through the API, closes the database cleanly, copies it, and opens the copy in a separate fresh directory using the same PGlite version. It compares all fifteen table counts and logical data digests plus original/derived media SHA-256 manifests, checks migrations, revokes restored credentials, and verifies fresh logins and preserved teacher/student results. It does not open `.local/database` or read a database URL from `.env`.
 
+After a successful drill, the application closes and its synthetic fixture directory is removed. The JSON evidence remains; its `fixtureDirectory` records the path used during that run. Failed drills retain their fixture for diagnosis. Set `KEEP_RECOVERY_FIXTURE=1` to retain a successful fixture too.
+
 This drill passed locally; [recovery.json](evidence/recovery.json) records its environment and assertions. Copying a running database directory is not this procedure. See [PGlite close](https://pglite.dev/docs/api#close) for clean shutdown. This local offline copy does not establish cross-version compatibility or production PostgreSQL recovery.
 
 ## Production PostgreSQL backup and restore drill
